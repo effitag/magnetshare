@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "MemoriaShare",
+      "hasCanvas": false,
+      "bodyTextLen": 520,
+      "bodyTextHash": "1db50c227b9ac0476b933b31b6bd6cc4ac0094ece84d4094191bd52c66166ccd",
+      "bodyTextPrefix": "MemoriaShare התחברות MemoriaShare כל התמונות מהאירוע, במקום אחד ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/phase1-home.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "MemoriaShare",
+      "hasCanvas": false,
+      "bodyTextLen": 520,
+      "bodyTextHash": "1db50c227b9ac0476b933b31b6bd6cc4ac0094ece84d4094191bd52c66166ccd",
+      "bodyTextPrefix": "MemoriaShare התחברות MemoriaShare כל התמונות מהאירוע, במקום אחד ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/phase1-home-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/phase1-home.json"
+}
