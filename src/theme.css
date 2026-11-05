@@ -156,14 +156,11 @@
   border-radius: 0.9rem;
 }
 
-.fab {
-  position: fixed;
-  z-index: 30;
-  bottom: 1.25rem;
-  inset-inline-end: 1.25rem;
+.hero-cta {
   display: inline-flex;
   min-height: 3.25rem;
-  max-width: calc(100% - 2.5rem);
+  width: fit-content;
+  max-width: 100%;
   align-items: center;
   justify-content: center;
   padding-inline: 1.25rem;

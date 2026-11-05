@@ -15,7 +15,7 @@ export function HomePage() {
   const loop = [...phrases, ...phrases];
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-paper pb-32">
+    <div className="relative min-h-screen overflow-x-hidden bg-paper">
       <header className="px-4 pt-4">
         <p className="font-display text-lg text-primary">MagnetimShare</p>
       </header>
@@ -31,12 +31,17 @@ export function HomePage() {
         </div>
       </div>
 
-      <section className="px-4 md:grid md:grid-cols-2 md:items-center md:gap-6">
+      <section className="px-4 pb-10 md:grid md:grid-cols-2 md:items-center md:gap-6">
         <h1 className="sticker">
           <span className="block">תמונה בתוך מגנט.</span>
           <span className="sticker-pop block">מודפסת ומוכנה לכם.</span>
         </h1>
-        <p className="mt-4 max-w-md text-base text-ink">האורחים מצלמים בתוך מסגרת שעיצבתם, ואנחנו מדפיסים לכל אחד מגנט משלו.</p>
+        <p className="mt-4 max-w-md text-base text-ink">
+          האורחים מצלמים בתוך מסגרת מעוצבת, ואנחנו מדפיסים לכל אחד מגנט משלו.
+        </p>
+        <Link to="/magnet/lead" className="hero-cta mt-6">
+          לפרטים ולהזמנה
+        </Link>
 
         <div className="magnet-stage mt-6">
           {shots.map((shot) => (
@@ -46,10 +51,6 @@ export function HomePage() {
           ))}
         </div>
       </section>
-
-      <Link to="/magnet/lead" className="fab">
-        לפרטים ולהזמנה
-      </Link>
     </div>
   );
 }

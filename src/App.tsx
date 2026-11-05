@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import { HomePage } from "@/features/home/HomePage";
 import { NotFoundPage } from "@/features/home/NotFoundPage";
+import { LeadPage } from "@/features/magnet/LeadPage";
 
 const DevOnlyPreviewBridge = import.meta.env.DEV
   ? lazy(() =>
@@ -23,6 +24,7 @@ export function App() {
         ) : null}
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/magnet/lead" element={<LeadPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>
