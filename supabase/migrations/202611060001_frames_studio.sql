@@ -13,7 +13,7 @@ alter table public.frames
   add column preview_path text,
   add column revision integer not null default 1,
   add column updated_at timestamptz not null default now(),
-  add column is_template boolean default false;
+  add column is_template boolean not null default false;
 
 alter table public.frames
   add constraint frames_bleed_mm_nonnegative check (bleed_mm >= 0),
