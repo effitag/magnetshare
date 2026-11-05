@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Plugin } from "vite";
@@ -63,7 +64,10 @@ export default defineConfig(({ command, isPreview }) => ({
     port: 8081,
     strictPort: true,
   },
-  resolve: { tsconfigPaths: true },
+  resolve: {
+    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+    tsconfigPaths: true,
+  },
   plugins: [
     pgliteBootstrapPlugin(),
     appEnvPlugin(),

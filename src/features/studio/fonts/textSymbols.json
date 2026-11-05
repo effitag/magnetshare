@@ -1,0 +1,19 @@
+[
+  { "label": "לב", "insert": "♥", "chars": ["♥", "🖤"], "source": "custom:heart-bold", "scale": 1.0},
+  { "label": "לב מבריק", "insert": "💖", "chars": ["💖"], "source": "custom:heart-shine", "scale": 1.0},
+  { "label": "לב עם ברק", "insert": "💓", "chars": ["💓"], "source": "custom:heart-gloss", "scale": 1.0},
+  { "label": "לב מצויר", "insert": "💟", "chars": ["💟"], "source": "custom:heart-simple", "scale": 1.0},
+  { "label": "לב בקו", "insert": "♡", "chars": ["♡"], "source": "ph:heart-light" },
+  { "label": "לב מחודד", "insert": "❤", "chars": ["❤"], "source": "ph:heart-straight-fill" },
+  { "label": "לב מוטה", "insert": "❥", "chars": ["❥"], "source": "ph:heart-fill", "rotate": -18},
+  { "label": "שני לבבות", "insert": "💕", "chars": ["💕"], "source": "mingcute:love-fill" },
+  { "label": "לבבות קופצים", "insert": "💞", "chars": ["💞"], "source": "custom:hearts-burst", "scale": 1.0},
+  { "label": "לב מקושקש", "insert": "\ue110", "chars": ["\ue110"], "source": "image:heart-scribble", "scale": 1.0},
+  { "label": "לב מקושקש עם קו", "insert": "\ue111", "chars": ["\ue111"], "source": "image:heart-scribble-outline", "scale": 1.0},
+  { "label": "טבעות", "insert": "⚭", "chars": ["⚭"], "source": "custom:rings-hearts", "scale": 1.08},
+  { "label": "טבעות יהלום", "insert": "💍", "chars": ["💍"], "source": "custom:rings-diamonds", "scale": 1.12},
+  { "label": "טבעות שזורות", "insert": "\ue100", "chars": ["\ue100"], "source": "custom:rings-tangled", "scale": 1.1},
+  { "label": "נצנוץ", "insert": "✦", "chars": ["✦"], "source": "ph:star-four-fill" },
+  { "label": "נצנוץ בקו", "insert": "✧", "chars": ["✧"], "source": "ph:star-four-light" },
+  { "label": "מגן דוד", "insert": "✡", "chars": ["✡"], "source": "ph:star-of-david-light" }
+]
