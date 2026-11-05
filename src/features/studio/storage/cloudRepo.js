@@ -72,6 +72,7 @@ export function createCloudRepo(gateway) {
         size: { ...DEFAULT_SIZE, ...r.size },
         tags: Array.isArray(r.tags) ? r.tags.map(String) : [],
         isTemplate: r.is_template !== false,
+        isPublished: r.is_published === true,
         thumbnailUrl: urls.get(keys[i]) ?? null,
       }));
     },
@@ -182,6 +183,16 @@ export function createCloudRepo(gateway) {
         },
         row.revision,
       );
+      if (rows.length) return rows[0].revision;
+      const latest = await gateway.getRevision(id);
+      if (latest === null) throw new NotFoundError();
+      throw new ConflictError(latest);
+    },
+
+    async unpublish(id) {
+      const row = await gateway.getTemplate(id);
+      if (!row) throw new NotFoundError();
+      const rows = await gateway.updateTemplate(id, { is_published: false }, row.revision);
       if (rows.length) return rows[0].revision;
       const latest = await gateway.getRevision(id);
       if (latest === null) throw new NotFoundError();

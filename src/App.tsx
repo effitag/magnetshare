@@ -21,7 +21,7 @@ const FramesTab = lazy(() => import("@/features/studio/FramesTab"));
 export function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         {DevOnlyPreviewBridge ? (
           <Suspense fallback={null}>
             <DevOnlyPreviewBridge />

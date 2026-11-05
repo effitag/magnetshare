@@ -29,6 +29,7 @@ export function createMemoryGateway() {
           updated_at: r.updated_at,
           revision: r.revision,
           is_template: r.is_template !== false,
+          is_published: r.is_published === true,
           size: r.doc.size,
           tags: r.doc.tags,
         }));

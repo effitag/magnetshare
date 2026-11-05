@@ -7,7 +7,7 @@ function sizeLabel({ widthMm, heightMm }) {
   return `${widthMm / 10}×${heightMm / 10}`;
 }
 
-export default function TemplateCard({ item, onOpen, onRename, onDelete, onDuplicate }) {
+export default function TemplateCard({ item, onOpen, onRename, onDelete, onDuplicate, onPublish, onUnpublish, isPublished }) {
   const { name, updatedAt, size, tags, thumbnailUrl } = item;
   const edited = updatedAt ? dateFormat.format(new Date(updatedAt)) : '';
   return (
@@ -35,13 +35,23 @@ export default function TemplateCard({ item, onOpen, onRename, onDelete, onDupli
           {sizeLabel(size)}
         </span>
       </div>
-      <div className="flex items-center gap-1 px-2 pb-2">
+      <div className="flex flex-wrap items-center gap-1 px-2 pb-2">
         <IconButton label="שינוי שם" onClick={onRename}>
           <Icon name="pencil" />
         </IconButton>
         {onDuplicate && (
           <button type="button" className="min-h-11 px-2 text-base text-ink" onClick={onDuplicate}>
             מסגרת לאירוע
+          </button>
+        )}
+        {onPublish && !isPublished && (
+          <button type="button" className="min-h-11 px-2 text-base text-ink" onClick={onPublish}>
+            פרסום
+          </button>
+        )}
+        {onUnpublish && (
+          <button type="button" className="min-h-11 px-2 text-base text-ink" onClick={onUnpublish}>
+            ביטול פרסום
           </button>
         )}
         <IconButton label="מחיקה" onClick={onDelete} className="hover:text-destructive">

@@ -93,6 +93,7 @@ export function useFrameStage(hostRef, { doc, pxPerMm, selectedId, getImage, ver
     bindElementEvents(s, doc);
     const state = useEditor.getState();
     applySelection(s, doc, state.selectedId, state.panPhoto);
+    if (hostRef.current) hostRef.current.__frameStage = s;
     s.stage.batchDraw();
   }, [doc, pxPerMm, getImage, version, showSample]);
 

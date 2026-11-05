@@ -65,6 +65,7 @@ function frameRow(row: Record<string, unknown>) {
     updated_at: row.updated_at,
     revision: row.revision,
     is_template: row.is_template,
+    is_published: row.is_published === true,
     size: design?.size,
     tags: design?.tags,
     doc: design,
@@ -75,7 +76,7 @@ export const frameGateway = {
   async listTemplates() {
     const { data, error } = await supabase
       .from("frames")
-      .select("id, name, updated_at, revision, is_template, design")
+      .select("id, name, updated_at, revision, is_template, is_published, design")
       .order("updated_at", { ascending: false });
     if (error) throw error;
     return (data ?? []).map((row) => frameRow(row as Record<string, unknown>));

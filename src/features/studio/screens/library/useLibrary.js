@@ -2,7 +2,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { notify } from '@/features/studio/ui/toast';
 import { createPresetDoc } from '@/features/studio/model/presets';
+import { renderPrintPng } from '@/features/studio/render/renderToCanvas';
 import { backupFileName, downloadBlob, exportAllTemplates, importBackup } from '@/features/studio/storage/backupZip';
+import { createAssetCache } from '@/features/studio/storage/assetCache';
 import { uploadBuiltinImages } from '@/features/studio/storage/builtinImages';
 import { isNetworkError } from '@/features/studio/storage/errors';
 import { importFrameFile } from './importFrame';
@@ -103,5 +105,24 @@ export function useLibrary(repo, onOpen) {
     if (ok) onOpen(created.id);
   }
 
-  return { items, loadError, busy, refresh, create, rename, remove, importFrame, exportZip, importZip, duplicateForEvent };
+  async function publish(item) {
+    const ok = await attempt(async () => {
+      const { doc } = await repo.load(item.id);
+      const assets = createAssetCache((path) => repo.readAsset(item.id, path));
+      await repo.publish(item.id, await renderPrintPng(doc, assets));
+    }, 'לא הצלחנו לפרסם את המסגרת. נסו שוב.');
+    if (ok) {
+      notify('המסגרת פורסמה. עכשיו אפשר להפעיל את האירוע.', 'info');
+      await refresh();
+    }
+    return ok;
+  }
+
+  async function unpublish(item) {
+    const ok = await attempt(() => repo.unpublish(item.id), 'לא הצלחנו לבטל את הפרסום.');
+    if (ok) await refresh();
+    return ok;
+  }
+
+  return { items, loadError, busy, refresh, create, rename, remove, importFrame, exportZip, importZip, duplicateForEvent, publish, unpublish };
 }

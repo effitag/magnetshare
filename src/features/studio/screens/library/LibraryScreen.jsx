@@ -52,6 +52,9 @@ export default function LibraryScreen({ repo, onOpen }) {
               onRename={() => setDialog({ kind: 'rename', item })}
               onDelete={() => setDialog({ kind: 'delete', item })}
               onDuplicate={item.isTemplate ? () => library.duplicateForEvent(item) : null}
+              onPublish={item.isTemplate ? null : () => library.publish(item)}
+              onUnpublish={item.isTemplate || !item.isPublished ? null : () => library.unpublish(item)}
+              isPublished={item.isPublished}
             />
           ))}
         </div>
