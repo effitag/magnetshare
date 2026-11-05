@@ -1,7 +1,7 @@
 import { toAppError } from "@/lib/errors";
 import { supabase } from "@/lib/supabase";
 import { isFrameObjectPath } from "@/features/studio/storage/paths";
-import type { EventCard, Frame, NewLeadInput } from "@/services/types";
+import type { EventCard, EventStatus, Frame, NewLeadInput } from "@/services/types";
 
 export async function insertLead(input: NewLeadInput): Promise<void> {
   try {
@@ -220,16 +220,152 @@ export async function listAdminEvents(): Promise<AdminEventRow[]> {
 }
 
 export async function setEventLive(eventId: string): Promise<void> {
-  const { data, error } = await supabase
-    .from("events")
-    .select("id, frame:frames(name, is_published)")
-    .eq("id", eventId)
-    .single();
-  if (error) throw toAppError(error, "לא הצלחנו לבדוק את האירוע.");
-  const frame = frameJoin(data.frame);
-  if (frame.is_published !== true) {
-    throw new Error(`כדי להפעיל את האירוע, פרסמו קודם את המסגרת "${frame.name ?? "מסגרת"}".`);
+  const event = await getAdminEvent(eventId);
+  if (!event.framePublished) {
+    throw new Error(`כדי להפעיל את האירוע, פרסמו קודם את המסגרת "${event.frameName}".`);
   }
   const update = await supabase.from("events").update({ status: "live" }).eq("id", eventId);
   if (update.error) throw toAppError(update.error, "לא הצלחנו להפעיל את האירוע.");
+}
+
+export type AdminFrameChoice = {
+  id: string;
+  name: string;
+  isTemplate: boolean;
+  isPublished: boolean;
+};
+
+export async function listAdminFrames(): Promise<AdminFrameChoice[]> {
+  const { data, error } = await supabase.from("frames").select("id, name, is_template, is_published").order("name", { ascending: true });
+  if (error) throw toAppError(error, "לא הצלחנו לטעון את המסגרות.");
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    name: (row.name as string) ?? "מסגרת",
+    isTemplate: row.is_template === true,
+    isPublished: row.is_published === true,
+  }));
+}
+
+export async function duplicateFrameForEvent(templateId: string): Promise<string> {
+  try {
+    const { createCloudRepo } = await import("@/features/studio/storage/cloudRepo");
+    const created = await createCloudRepo(frameGateway).duplicateForEvent(templateId);
+    return created.id as string;
+  } catch (error) {
+    throw toAppError(error, "לא הצלחנו ליצור מסגרת לאירוע.");
+  }
+}
+
+export type EventDraft = {
+  title: string;
+  slug: string;
+  eventDate: string;
+  place: string;
+  frameId: string;
+  printQuota: number;
+  status: EventStatus;
+};
+
+export type AdminEventDetail = {
+  id: string;
+  title: string;
+  slug: string;
+  eventDate: string | null;
+  place: string | null;
+  frameId: string;
+  frameName: string;
+  framePublished: boolean;
+  printQuota: number;
+  status: EventStatus;
+  lead: { name: string; phone: string } | null;
+  hasPrintJobs: boolean;
+};
+
+function eventRow(draft: EventDraft) {
+  return {
+    title: draft.title.trim(),
+    slug: draft.slug.trim().toLowerCase(),
+    event_date: draft.eventDate || null,
+    place: draft.place.trim() || null,
+    frame_id: draft.frameId,
+    print_quota: draft.printQuota,
+    status: draft.status,
+  };
+}
+
+function eventWriteError(error: unknown): never {
+  const raw = error as { code?: string; message?: string };
+  if (raw.message?.includes("event_frame_is_template")) {
+    throw new Error("אי אפשר לבחור תבנית. צרו ממנה מסגרת לאירוע.");
+  }
+  if (raw.code === "23505") throw new Error("הכתובת הזו תפוסה. בחרו כתובת אחרת.");
+  if (raw.code === "23514" && raw.message?.includes("print_quota")) {
+    throw new Error("לכל אורח מגיע לפחות מגנט אחד.");
+  }
+  throw toAppError(error, "לא הצלחנו לשמור את האירוע.");
+}
+
+async function assertLiveFrame(frameId: string): Promise<void> {
+  const { data, error } = await supabase.from("frames").select("name, is_published, is_template").eq("id", frameId).maybeSingle();
+  if (error || !data) throw toAppError(error, "לא הצלחנו לבדוק את המסגרת.");
+  if (data.is_template === true) throw new Error("אי אפשר לבחור תבנית. צרו ממנה מסגרת לאירוע.");
+  if (data.is_published !== true) {
+    throw new Error(`כדי להפעיל את האירוע, פרסמו קודם את המסגרת "${data.name ?? "מסגרת"}".`);
+  }
+}
+
+export async function createEvent(draft: EventDraft): Promise<string> {
+  if (draft.status === "live") await assertLiveFrame(draft.frameId);
+  const { data, error } = await supabase.from("events").insert(eventRow(draft)).select("id").single();
+  if (error) eventWriteError(error);
+  return data.id as string;
+}
+
+export async function updateEvent(eventId: string, draft: EventDraft): Promise<string> {
+  if (draft.status === "live") await assertLiveFrame(draft.frameId);
+  const { error } = await supabase.from("events").update(eventRow(draft)).eq("id", eventId);
+  if (error) eventWriteError(error);
+  return eventId;
+}
+
+function one<T>(value: T | T[] | null): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
+export async function getAdminEvent(id: string): Promise<AdminEventDetail> {
+  const { data, error } = await supabase
+    .from("events")
+    .select("id, slug, title, event_date, place, frame_id, print_quota, status, frame:frames(name, is_published), lead:leads(organizer_name, phone)")
+    .eq("id", id)
+    .single();
+  if (error) throw toAppError(error, "לא הצלחנו לפתוח את האירוע.");
+  const jobs = await supabase.from("print_jobs").select("id").eq("event_id", id).limit(1);
+  if (jobs.error) throw toAppError(jobs.error, "לא הצלחנו לבדוק את עבודות ההדפסה.");
+  const frame = frameJoin(data.frame);
+  const lead = one(data.lead as { organizer_name?: string; phone?: string } | { organizer_name?: string; phone?: string }[] | null);
+  return {
+    id: data.id as string,
+    title: data.title as string,
+    slug: data.slug as string,
+    eventDate: (data.event_date as string | null) ?? null,
+    place: (data.place as string | null) ?? null,
+    frameId: data.frame_id as string,
+    frameName: frame.name ?? "מסגרת",
+    framePublished: frame.is_published === true,
+    printQuota: data.print_quota as number,
+    status: data.status as EventStatus,
+    lead: lead?.organizer_name ? { name: lead.organizer_name, phone: lead.phone ?? "" } : null,
+    hasPrintJobs: (jobs.data ?? []).length > 0,
+  };
+}
+
+export async function deleteEvent(id: string): Promise<void> {
+  const jobs = await supabase.from("print_jobs").select("id").eq("event_id", id).limit(1);
+  if (jobs.error) throw toAppError(jobs.error, "לא הצלחנו לבדוק את עבודות ההדפסה.");
+  if ((jobs.data ?? []).length > 0) {
+    throw new Error("לאירוע הזה יש מגנטים להדפסה. אפשר לסגור אותו, לא למחוק.");
+  }
+  const { error } = await supabase.from("events").delete().eq("id", id);
+  if (error) throw toAppError(error, "לא הצלחנו למחוק את האירוע.");
 }
