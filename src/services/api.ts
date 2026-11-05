@@ -1,25 +1,20 @@
 import { toAppError } from "@/lib/errors";
 import { supabase } from "@/lib/supabase";
-import type { EventCard, Frame, Lead, NewLeadInput } from "@/services/types";
+import type { EventCard, Frame, NewLeadInput } from "@/services/types";
 
-export async function insertLead(input: NewLeadInput): Promise<Lead> {
+export async function insertLead(input: NewLeadInput): Promise<void> {
   try {
-    const { data, error } = await supabase
-      .from("leads")
-      .insert({
-        organizer_name: input.organizer_name.trim(),
-        phone: input.phone.trim(),
-        event_name: input.event_name.trim(),
-        event_date: input.event_date || null,
-        place: input.place?.trim() || null,
-        guest_count_range: input.guest_count_range?.trim() || null,
-        frame_id: input.frame_id || null,
-        status: "new",
-      })
-      .select("id, organizer_name, phone, event_name, event_date, place, guest_count_range, frame_id, status, created_at")
-      .single();
+    const { error } = await supabase.from("leads").insert({
+      organizer_name: input.organizer_name.trim(),
+      phone: input.phone.trim(),
+      event_name: input.event_name.trim(),
+      event_date: input.event_date || null,
+      place: input.place?.trim() || null,
+      guest_count_range: input.guest_count_range?.trim() || null,
+      frame_id: input.frame_id || null,
+      status: "new",
+    });
     if (error) throw error;
-    return data as Lead;
   } catch (error) {
     throw toAppError(error, "לא הצלחנו לשמור את הפרטים. בדקו את החיבור ונסו שוב.");
   }

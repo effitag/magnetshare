@@ -1,4 +1,7 @@
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { ContactSection } from "@/features/home/ContactSection";
+import { HomeSections } from "@/features/home/HomeSections";
+import { SiteFooter } from "@/features/home/SiteFooter";
 
 const phrases = [
   "בלי הורדת אפליקציה",
@@ -13,9 +16,21 @@ const shots = [
 
 export function HomePage() {
   const loop = [...phrases, ...phrases];
+  const [contactVisible, setContactVisible] = useState(false);
+
+  useEffect(() => {
+    const node = document.getElementById("contact");
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setContactVisible(entry.isIntersecting),
+      { threshold: 0.2 },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-paper pb-[calc(7rem+env(safe-area-inset-bottom,0px))]">
+    <div className="relative min-h-screen overflow-x-hidden bg-paper pt-[env(safe-area-inset-top,0px)]">
       <header className="px-4 pt-4">
         <p className="font-display text-lg text-primary">MagnetimShare</p>
       </header>
@@ -49,9 +64,15 @@ export function HomePage() {
         </div>
       </section>
 
-      <Link to="/magnet/lead" className="fab">
-        לפרטים ולהזמנה
-      </Link>
+      <HomeSections />
+      <ContactSection />
+      <SiteFooter />
+
+      {contactVisible ? null : (
+        <a href="#contact" className="fab">
+          לפרטים ולהזמנה
+        </a>
+      )}
     </div>
   );
 }
