@@ -17,6 +17,12 @@ const DevOnlyPreviewBridge = import.meta.env.DEV
   : null;
 
 const FramesTab = lazy(() => import("@/features/studio/FramesTab"));
+const EventEditorPage = lazy(() =>
+  import("@/features/admin/events/EventEditorPage").then((module) => ({ default: module.EventEditorPage })),
+);
+const TableCardPage = lazy(() =>
+  import("@/features/admin/events/TableCardPage").then((module) => ({ default: module.TableCardPage })),
+);
 
 export function App() {
   return (
@@ -34,6 +40,30 @@ export function App() {
           <Route path="/accessibility" element={<LegalPage kind="accessibility" />} />
           <Route path="/admin" element={<AdminGate />}>
             <Route index element={<EventsPanel />} />
+            <Route
+              path="events/new"
+              element={
+                <Suspense fallback={<LoadingScreen />}>
+                  <EventEditorPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="events/:eventId/card"
+              element={
+                <Suspense fallback={<LoadingScreen />}>
+                  <TableCardPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="events/:eventId"
+              element={
+                <Suspense fallback={<LoadingScreen />}>
+                  <EventEditorPage />
+                </Suspense>
+              }
+            />
             <Route path="queue" element={<AdminEmpty title="תור הדפסה" />} />
             <Route
               path="frames/*"

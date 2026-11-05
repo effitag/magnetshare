@@ -97,7 +97,7 @@ function AdminShell() {
       }
     >
       {!editingFrame && (
-        <header className="flex items-center justify-between px-4 pt-4">
+        <header className="flex items-center justify-between px-4 pt-4 print:hidden">
           <p className="font-display text-lg text-primary">MagnetimShare</p>
           <button type="button" className="inline-flex min-h-11 items-center text-base text-ink" onClick={() => void signOut()}>
             יציאה
@@ -106,16 +106,20 @@ function AdminShell() {
       )}
       <Outlet />
       {!editingFrame && (
-        <nav className="fixed inset-x-0 bottom-0 z-20 border-t-[3px] border-ink bg-sticker pb-[env(safe-area-inset-bottom,0px)]" aria-label="ניהול">
+        <nav className="fixed inset-x-0 bottom-0 z-20 border-t-[3px] border-ink bg-sticker pb-[env(safe-area-inset-bottom,0px)] print:hidden" aria-label="ניהול">
           <ul className="flex">
             {tabs.map((tab) => (
               <li key={tab.to} className="flex-1">
                 <NavLink
                   to={tab.to}
                   end={tab.end}
-                  className={({ isActive }) =>
-                    `flex min-h-12 items-center justify-center px-1 text-center text-base leading-tight ${isActive ? "bg-pop text-ink" : "text-ink"}`
-                  }
+                  className={() => {
+                    const active =
+                      tab.to === "/admin"
+                        ? pathname === "/admin" || pathname.startsWith("/admin/events")
+                        : pathname === tab.to || pathname.startsWith(`${tab.to}/`);
+                    return `flex min-h-12 items-center justify-center px-1 text-center text-base leading-tight ${active ? "bg-pop text-ink" : "text-ink"}`;
+                  }}
                 >
                   {tab.label}
                 </NavLink>
