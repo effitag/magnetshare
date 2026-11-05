@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import Button from '@/features/studio/ui/Button';
 import { ConfirmDialog, NameDialog } from '@/features/studio/ui/Dialog';
+import EventAssignDialog from './EventAssignDialog';
 import LibraryActions from './LibraryActions';
 import NewTemplateDialog from './NewTemplateDialog';
 import TagFilter from './TagFilter';
@@ -51,7 +52,8 @@ export default function LibraryScreen({ repo, onOpen }) {
               onOpen={() => onOpen(item.id)}
               onRename={() => setDialog({ kind: 'rename', item })}
               onDelete={() => setDialog({ kind: 'delete', item })}
-              onDuplicate={item.isTemplate ? () => library.duplicateForEvent(item) : null}
+              onDuplicate={item.isTemplate ? () => setDialog({ kind: 'for-event', mode: 'copy', item }) : null}
+              onAssign={item.isTemplate ? null : () => setDialog({ kind: 'for-event', mode: 'assign', item })}
               onPublish={item.isTemplate ? null : () => library.publish(item)}
               onUnpublish={item.isTemplate || !item.isPublished ? null : () => library.unpublish(item)}
               isPublished={item.isPublished}
@@ -61,6 +63,18 @@ export default function LibraryScreen({ repo, onOpen }) {
       )}
 
       {dialog?.kind === 'new' && <NewTemplateDialog onSubmit={library.create} onClose={close} />}
+      {dialog?.kind === 'for-event' && (
+        <EventAssignDialog
+          title={dialog.mode === 'copy' ? 'מסגרת לאירוע' : 'שיוך לאירוע'}
+          onClose={close}
+          onSubmit={async (eventId) => {
+            const ok = dialog.mode === 'copy'
+              ? await library.duplicateForEvent(dialog.item, eventId)
+              : await library.assignToEvent(dialog.item, eventId);
+            if (ok) close();
+          }}
+        />
+      )}
       {dialog?.kind === 'rename' && (
         <NameDialog
           title="שינוי שם"

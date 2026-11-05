@@ -25,7 +25,7 @@ export async function getEventCardBySlug(slug: string): Promise<EventCard | null
   try {
     const { data, error } = await supabase
       .from("event_cards")
-      .select("id, slug, title, event_date, place, frame_id, print_quota, status")
+      .select("id, slug, title, event_date, place, frame_id, print_quota, status, cover_path, screen_path")
       .eq("slug", slug)
       .maybeSingle();
     if (error) throw error;
@@ -183,8 +183,8 @@ export const frameGateway = {
 export async function uploadGuestPhoto(eventId: string, guestId: string, file: File): Promise<string> {
   const safeName = file.name.replace(/[^\w.-]+/g, "_");
   const path = `${eventId}/${guestId}/${Date.now()}_${safeName}`;
-  if (path.split("/")[0] === "frames") {
-    throw toAppError(new Error("frames"), "אי אפשר לשמור קובץ של אורח בתיקיית המסגרות.");
+  if (path.split("/")[0] === "frames" || path.split("/")[0] === "events") {
+    throw toAppError(new Error("reserved"), "אי אפשר לשמור קובץ של אורח בתיקייה הזו.");
   }
   const { error } = await supabase.storage.from("media").upload(path, file, { upsert: false });
   if (error) throw toAppError(error, "לא הצלחנו לשמור את התמונה. נסו שוב.");
@@ -195,9 +195,24 @@ export type AdminEventRow = {
   id: string;
   title: string;
   status: string;
-  frame_id: string;
+  frame_id: string | null;
   frame_name: string;
   frame_published: boolean;
+};
+
+export type AdminEventDetail = {
+  id: string;
+  slug: string;
+  title: string;
+  eventDate: string | null;
+  printQuota: number;
+  coverPath: string | null;
+};
+
+export type EventDraft = {
+  title: string;
+  eventDate: string;
+  printQuota: number;
 };
 
 export async function listAdminEvents(): Promise<AdminEventRow[]> {
@@ -209,27 +224,183 @@ export async function listAdminEvents(): Promise<AdminEventRow[]> {
   return (data ?? []).map((row) => {
     const frame = frameJoin(row.frame);
     return {
-      id: row.id,
-      title: row.title,
-      status: row.status,
-      frame_id: row.frame_id,
-      frame_name: frame.name ?? "מסגרת",
+      id: row.id as string,
+      title: row.title as string,
+      status: row.status as string,
+      frame_id: (row.frame_id as string | null) ?? null,
+      frame_name: frame.name ?? "",
       frame_published: frame.is_published === true,
     };
   });
 }
 
-export async function setEventLive(eventId: string): Promise<void> {
+const LIVE_BLOCK = "כדי להפעיל את האירוע צריך מסגרת מפורסמת. במסגרות יוצרים מסגרת לאירוע, משייכים אותה, ומפרסמים.";
+
+export async function setEventLiveSwitch(eventId: string, live: boolean): Promise<void> {
+  if (!live) {
+    const closed = await supabase.from("events").update({ status: "closed" }).eq("id", eventId);
+    if (closed.error) throw toAppError(closed.error, "לא הצלחנו לסגור את האירוע.");
+    return;
+  }
   const { data, error } = await supabase
     .from("events")
-    .select("id, frame:frames(name, is_published)")
+    .select("frame_id, frame:frames(name, is_published)")
     .eq("id", eventId)
     .single();
   if (error) throw toAppError(error, "לא הצלחנו לבדוק את האירוע.");
   const frame = frameJoin(data.frame);
-  if (frame.is_published !== true) {
-    throw new Error(`כדי להפעיל את האירוע, פרסמו קודם את המסגרת "${frame.name ?? "מסגרת"}".`);
-  }
+  if (!data.frame_id || frame.is_published !== true) throw new Error(LIVE_BLOCK);
   const update = await supabase.from("events").update({ status: "live" }).eq("id", eventId);
-  if (update.error) throw toAppError(update.error, "לא הצלחנו להפעיל את האירוע.");
+  if (update.error) {
+    if (update.error.message?.includes("event_frame_not_published")) throw new Error(LIVE_BLOCK);
+    throw toAppError(update.error, "לא הצלחנו להפעיל את האירוע.");
+  }
+}
+
+export async function getAdminEvent(id: string): Promise<AdminEventDetail> {
+  const { data, error } = await supabase
+    .from("events")
+    .select("id, slug, title, event_date, print_quota, cover_path")
+    .eq("id", id)
+    .single();
+  if (error) throw toAppError(error, "לא הצלחנו לפתוח את האירוע.");
+  return {
+    id: data.id as string,
+    slug: data.slug as string,
+    title: data.title as string,
+    eventDate: (data.event_date as string | null) ?? null,
+    printQuota: data.print_quota as number,
+    coverPath: (data.cover_path as string | null) ?? null,
+  };
+}
+
+async function insertEvent(draft: EventDraft, slug: string): Promise<AdminEventDetail> {
+  const { data, error } = await supabase
+    .from("events")
+    .insert({
+      title: draft.title.trim(),
+      event_date: draft.eventDate,
+      slug,
+      print_quota: draft.printQuota,
+      status: "draft",
+      frame_id: null,
+    })
+    .select("id, slug, title")
+    .single();
+  if (error) {
+    if (error.code === "23505") throw new Error("retry");
+    throw toAppError(error, "לא הצלחנו לשמור את האירוע.");
+  }
+  return {
+    id: data.id as string,
+    slug: data.slug as string,
+    title: data.title as string,
+    eventDate: draft.eventDate,
+    printQuota: draft.printQuota,
+    coverPath: null,
+  };
+}
+
+export async function createEvent(draft: EventDraft): Promise<AdminEventDetail> {
+  const { suggestSlug, randomSuffix } = await import("@/features/admin/events/slug");
+  try {
+    return await insertEvent(draft, suggestSlug(draft.title));
+  } catch (error) {
+    if (error instanceof Error && error.message === "retry") {
+      return insertEvent(draft, suggestSlug(draft.title, randomSuffix()));
+    }
+    throw error;
+  }
+}
+
+export async function updateEventDetails(eventId: string, draft: EventDraft): Promise<AdminEventDetail> {
+  const { data, error } = await supabase
+    .from("events")
+    .update({
+      title: draft.title.trim(),
+      event_date: draft.eventDate,
+      print_quota: draft.printQuota,
+    })
+    .eq("id", eventId)
+    .select("id, slug, title, cover_path")
+    .single();
+  if (error) throw toAppError(error, "לא הצלחנו לשמור את האירוע.");
+  return {
+    id: data.id as string,
+    slug: data.slug as string,
+    title: data.title as string,
+    eventDate: draft.eventDate,
+    printQuota: draft.printQuota,
+    coverPath: (data.cover_path as string | null) ?? null,
+  };
+}
+
+export async function saveEventCover(eventId: string, file: File): Promise<string> {
+  const ext = file.name.toLowerCase().endsWith(".png") ? "png" : file.name.toLowerCase().endsWith(".webp") ? "webp" : "jpg";
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) && !/\.(jpe?g|png|webp)$/i.test(file.name)) {
+    throw new Error("אפשר להעלות תמונת JPG, PNG או WebP.");
+  }
+  const path = `events/${eventId}/cover.${ext}`;
+  const { error } = await supabase.storage.from("media").upload(path, file, {
+    contentType: file.type || "image/jpeg",
+    upsert: true,
+  });
+  if (error) throw toAppError(error, "לא הצלחנו לשמור את תמונת האירוע.");
+  const update = await supabase.from("events").update({ cover_path: path }).eq("id", eventId);
+  if (update.error) throw toAppError(update.error, "לא הצלחנו לשמור את תמונת האירוע.");
+  return path;
+}
+
+export async function assignFrameToEvent(frameId: string, eventId: string): Promise<void> {
+  const frame = await supabase.from("frames").select("is_template, is_published").eq("id", frameId).maybeSingle();
+  if (frame.error) throw toAppError(frame.error, "לא הצלחנו לבדוק את המסגרת.");
+  if (!frame.data || frame.data.is_template === true) {
+    throw new Error("אי אפשר לשייך תבנית. צרו ממנה מסגרת לאירוע.");
+  }
+  const target = await supabase.from("events").select("status").eq("id", eventId).maybeSingle();
+  if (target.error || !target.data) throw toAppError(target.error, "האירוע לא נמצא.");
+  if (target.data.status === "live" && frame.data.is_published !== true) {
+    throw new Error("אי אפשר לשייך מסגרת שלא פורסמה לאירוע חי.");
+  }
+  const others = await supabase.from("events").select("id, status, title").eq("frame_id", frameId).neq("id", eventId);
+  if (others.error) throw toAppError(others.error, "לא הצלחנו לבדוק את השיוך.");
+  const blocking = (others.data ?? []).find((row) => row.status === "live");
+  if (blocking) throw new Error(`המסגרת כבר משויכת לאירוע חי «${blocking.title}».`);
+  const otherIds = (others.data ?? []).map((row) => row.id as string);
+  if (otherIds.length) {
+    const cleared = await supabase.from("events").update({ frame_id: null }).in("id", otherIds);
+    if (cleared.error) throw toAppError(cleared.error, "לא הצלחנו לשחרר את המסגרת מהאירוע הקודם.");
+  }
+  const update = await supabase.from("events").update({ frame_id: frameId }).eq("id", eventId);
+  if (update.error) {
+    if (update.error.message?.includes("event_frame_is_template")) {
+      throw new Error("אי אפשר לשייך תבנית. צרו ממנה מסגרת לאירוע.");
+    }
+    throw toAppError(update.error, "לא הצלחנו לשייך את המסגרת לאירוע.");
+  }
+}
+
+export async function ensureGuestSession(): Promise<string> {
+  const existing = await supabase.auth.getSession();
+  if (existing.data.session?.user) return existing.data.session.user.id;
+  const signed = await supabase.auth.signInAnonymously();
+  if (signed.error || !signed.data.user) throw toAppError(signed.error, "לא הצלחנו לפתוח את האירוע. נסו שוב.");
+  return signed.data.user.id;
+}
+
+export async function guestMagnetsLeft(eventId: string, quota: number): Promise<number> {
+  const session = await supabase.auth.getSession();
+  const uid = session.data.session?.user.id;
+  const { data, error } = await supabase.from("print_jobs").select("guest_id, copies, status").eq("event_id", eventId);
+  if (error) throw toAppError(error, "לא הצלחנו לבדוק כמה מגנטים נשארו.");
+  const used = (data ?? [])
+    .filter((row) => row.guest_id === uid && row.status !== "rejected")
+    .reduce((sum, row) => sum + Number(row.copies ?? 0), 0);
+  return Math.max(0, quota - used);
+}
+
+export async function signedMediaUrl(path: string): Promise<string | null> {
+  const { data, error } = await supabase.storage.from("media").createSignedUrl(path, 60 * 30);
+  if (error || !data?.signedUrl) return null;
+  return data.signedUrl;
 }

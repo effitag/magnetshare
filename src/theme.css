@@ -265,6 +265,29 @@
   scroll-margin-top: 20vh;
 }
 
+.field-date {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media print {
+  @page {
+    size: 105mm 148mm;
+    margin: 8mm;
+  }
+
+  .table-card {
+    width: 89mm;
+    max-width: none;
+    border: 0;
+    box-shadow: none;
+    break-inside: avoid;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .marquee-track {
     animation: none !important;

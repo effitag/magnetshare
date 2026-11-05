@@ -1,51 +1,55 @@
 import { useEffect, useState } from "react";
-import { listAdminEvents, setEventLive, type AdminEventRow } from "@/services/api";
+import { Link } from "react-router-dom";
+import { listAdminEvents, setEventLiveSwitch, type AdminEventRow } from "@/services/api";
+import { EventList, type EventListItem } from "@/features/admin/EventList";
+
+function toItem(row: AdminEventRow): EventListItem {
+  return {
+    id: row.id,
+    title: row.title,
+    status: row.status,
+    frameId: row.frame_id,
+    framePublished: row.frame_published,
+  };
+}
 
 export function EventsPanel() {
-  const [events, setEvents] = useState<AdminEventRow[] | null>(null);
+  const [events, setEvents] = useState<EventListItem[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
 
   useEffect(() => {
     listAdminEvents()
-      .then(setEvents)
+      .then((rows) => setEvents(rows.map(toItem)))
       .catch((error: Error) => setMessage(error.message));
   }, []);
 
-  async function goLive(event: AdminEventRow) {
+  async function toggle(event: EventListItem, live: boolean) {
     setMessage(null);
+    setPendingId(event.id);
     try {
-      await setEventLive(event.id);
-      setEvents((current) => current?.map((row) => (row.id === event.id ? { ...row, status: "live" } : row)) ?? current);
+      await setEventLiveSwitch(event.id, live);
+      setEvents((current) => current?.map((row) => (row.id === event.id ? { ...row, status: live ? "live" : "closed" } : row)) ?? current);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "לא הצלחנו להפעיל את האירוע.");
+      setMessage(error instanceof Error ? error.message : "לא הצלחנו לעדכן את האירוע.");
+    } finally {
+      setPendingId(null);
     }
   }
 
   return (
-    <section className="px-4 pt-8">
-      <h1 className="font-display text-4xl leading-none text-ink">אירועים</h1>
-      <p className="mt-3 text-base text-ink">אירוע עולה לאוויר רק אחרי שהמסגרת שלו פורסמה.</p>
-      {message && (
-        <p role="alert" className="mt-4 rounded-2xl border-[3px] border-ink bg-sticker px-4 py-3 text-base text-ink">
-          {message}
-        </p>
+    <section className="mx-auto w-full max-w-xl px-4 pt-6">
+      <div className="flex items-end justify-between gap-3">
+        <h1 className="font-display text-4xl leading-none text-ink">אירועים</h1>
+        <Link className="inline-flex min-h-12 items-center rounded-full bg-pop px-4 text-base text-ink" to="/admin/events/new">
+          אירוע חדש
+        </Link>
+      </div>
+      {events ? (
+        <EventList events={events} message={message} pendingId={pendingId} onToggle={(event, live) => void toggle(event, live)} />
+      ) : (
+        <p className="mt-6 text-base text-ink">{message ?? "טוענים…"}</p>
       )}
-      {events?.length === 0 && <p className="mt-6 text-base text-ink">עוד אין אירועים.</p>}
-      <ul className="mt-6 grid gap-3">
-        {events?.map((event) => (
-          <li key={event.id} className="rounded-2xl border-[3px] border-ink bg-sticker p-4">
-            <h2 className="text-lg text-ink">{event.title}</h2>
-            <p className="mt-1 text-base text-ink">
-              {event.frame_name} · {event.status === "live" ? "באוויר" : "טיוטה"}
-            </p>
-            {event.status !== "live" && (
-              <button type="button" className="mt-3 min-h-12 rounded-full bg-pop px-4 text-base text-ink" onClick={() => void goLive(event)}>
-                הפעלה
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }
