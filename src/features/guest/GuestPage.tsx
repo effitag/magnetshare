@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { ensureGuestSession, getEventCardBySlug, guestMagnetsLeft, signedMediaUrl } from "@/services/api";
+import {
+  ensureGuestSession,
+  getEventCardBySlug,
+  guestMagnetsLeft,
+  signedMediaUrl,
+} from "@/services/api";
 import { inAppBrowser } from "./browser";
 import { GuestLanding } from "./GuestLanding";
 
@@ -8,7 +13,9 @@ function dateLabel(value: string | null): string | null {
   if (!value) return null;
   const [year, month, day] = value.split("-").map(Number);
   if (!year || !month || !day) return value;
-  return new Intl.DateTimeFormat("he-IL", { dateStyle: "long" }).format(new Date(year, month - 1, day));
+  return new Intl.DateTimeFormat("he-IL", { dateStyle: "long" }).format(
+    new Date(year, month - 1, day),
+  );
 }
 
 export function GuestPage() {
@@ -17,6 +24,7 @@ export function GuestPage() {
   const [title, setTitle] = useState("");
   const [when, setWhen] = useState<string | null>(null);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [frameUrl, setFrameUrl] = useState<string | null>(null);
   const [left, setLeft] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,14 +42,20 @@ export function GuestPage() {
           return;
         }
         await ensureGuestSession();
-        const [magnets, cover] = await Promise.all([
+        const [magnets, cover, frame] = await Promise.all([
           guestMagnetsLeft(card.id, card.print_quota),
-          card.cover_path ? signedMediaUrl(card.cover_path) : Promise.resolve(null),
+          card.cover_path
+            ? signedMediaUrl(card.cover_path, { width: 800, resize: "cover" })
+            : Promise.resolve(null),
+          card.screen_path
+            ? signedMediaUrl(card.screen_path, { width: 480, resize: "contain" })
+            : Promise.resolve(null),
         ]);
         if (cancelled) return;
         setTitle(card.title);
         setWhen(dateLabel(card.event_date));
         setCoverUrl(cover);
+        setFrameUrl(frame);
         setLeft(magnets);
         setView("live");
       })
@@ -54,10 +68,10 @@ export function GuestPage() {
   }, [slug]);
 
   if (error) {
-    return <main className="bg-paper px-4 pt-10 text-base text-primary">{error}</main>;
+    return <main className="guest-stage px-5 pt-10 text-base text-primary">{error}</main>;
   }
   if (view === "loading") {
-    return <main className="bg-paper px-4 pt-10 text-base text-ink">טוענים…</main>;
+    return <main className="guest-stage px-5 pt-10 text-base text-ink">טוענים…</main>;
   }
   return (
     <GuestLanding
@@ -65,6 +79,7 @@ export function GuestPage() {
       title={title}
       dateLabel={when}
       coverUrl={coverUrl}
+      frameUrl={frameUrl}
       magnetsLeft={left}
       inApp={inAppBrowser(navigator.userAgent)}
       cameraTo={`/e/${slug}/camera`}

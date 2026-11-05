@@ -12,12 +12,10 @@
   --font-sans: "Rubik", "Segoe UI", sans-serif;
   --font-display: "Secular One", "Rubik", sans-serif;
   --shadow-card:
-    0px 0px 0px 1px rgba(28, 20, 22, 0.06),
-    0px 1px 2px -1px rgba(28, 20, 22, 0.06),
+    0px 0px 0px 1px rgba(28, 20, 22, 0.06), 0px 1px 2px -1px rgba(28, 20, 22, 0.06),
     0px 2px 4px 0px rgba(28, 20, 22, 0.04);
   --shadow-card-hover:
-    0px 0px 0px 1px rgba(28, 20, 22, 0.08),
-    0px 1px 2px -1px rgba(28, 20, 22, 0.08),
+    0px 0px 0px 1px rgba(28, 20, 22, 0.08), 0px 1px 2px -1px rgba(28, 20, 22, 0.08),
     0px 8px 20px 0px rgba(28, 20, 22, 0.06);
   --shadow-polaroid: 0 12px 28px rgba(28, 20, 22, 0.18);
 }
@@ -165,7 +163,9 @@
   display: inline-flex;
   min-height: 3rem;
   gap: 0.5rem;
-  max-width: calc(100% - 2.5rem - env(safe-area-inset-inline-start, 0px) - env(safe-area-inset-inline-end, 0px));
+  max-width: calc(
+    100% - 2.5rem - env(safe-area-inset-inline-start, 0px) - env(safe-area-inset-inline-end, 0px)
+  );
   align-items: center;
   justify-content: center;
   padding-inline: 1.25rem;
@@ -293,5 +293,346 @@
     animation: none !important;
     animation-duration: 0s !important;
     transform: none !important;
+  }
+
+  .guest-hero-media,
+  .guest-fallback,
+  .guest-name,
+  .guest-date,
+  .guest-peek {
+    animation: none;
+  }
+}
+
+.guest-stage {
+  min-height: 100dvh;
+  overflow-x: clip;
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+.guest-top {
+  position: relative;
+}
+
+.guest-hero {
+  position: relative;
+  height: 68dvh;
+  overflow: hidden;
+  background: var(--color-pop-wash);
+}
+
+.guest-hero-media,
+.guest-fallback {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  animation: guest-fade 700ms ease both;
+}
+
+.guest-hero-media {
+  object-fit: cover;
+  outline: none;
+}
+
+.guest-fallback {
+  background-color: var(--color-pop-wash);
+  background-image:
+    radial-gradient(circle at 14% 18%, var(--color-pop) 0 22px, transparent 23px),
+    radial-gradient(circle at 84% 16%, var(--color-sticker) 0 16px, transparent 17px),
+    radial-gradient(circle at 76% 74%, var(--color-pop) 0 11px, transparent 12px),
+    radial-gradient(circle at 22% 80%, var(--color-sticker) 0 30px, transparent 31px),
+    radial-gradient(circle at 50% 46%, var(--color-paper) 0 70px, transparent 71px);
+}
+
+.guest-hero-fade {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 1;
+  height: 46%;
+  background: linear-gradient(to bottom, transparent, var(--color-paper));
+  pointer-events: none;
+}
+
+.guest-caption {
+  position: absolute;
+  z-index: 2;
+  inset-inline: 1rem;
+  bottom: 0.85rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.55rem 0.7rem;
+  max-width: calc(100% - 2rem);
+}
+
+.guest-name {
+  flex: 1 1 12rem;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 10.5vw, 3.5rem);
+  font-weight: 400;
+  line-height: 0.95;
+  color: var(--color-sticker);
+  -webkit-text-stroke: var(--sticker-stroke) var(--color-ink);
+  paint-order: stroke fill;
+  text-shadow:
+    -1px -1px 0 var(--color-ink),
+    1px -1px 0 var(--color-ink),
+    -1px 1px 0 var(--color-ink),
+    1px 1px 0 var(--color-ink),
+    4px 4px 0 var(--color-ink);
+  animation: guest-drop 650ms 120ms ease both;
+}
+
+.guest-date {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  margin: 0 0 0.35rem;
+  padding: 0.3rem 0.75rem;
+  border: 2px solid var(--color-ink);
+  border-radius: 999px;
+  background: var(--color-pop);
+  color: var(--color-ink);
+  font-size: 1rem;
+  line-height: 1.2;
+  box-shadow: 3px 3px 0 var(--color-ink);
+  transform: rotate(-6deg);
+  animation: guest-drop-date 650ms 200ms ease both;
+}
+
+.guest-peek {
+  position: absolute;
+  z-index: 3;
+  top: 12%;
+  inset-inline-end: 0.9rem;
+  width: 5.75rem;
+  aspect-ratio: 4 / 5;
+  margin: 0;
+  padding: 0.35rem;
+  border: 3px solid var(--color-ink);
+  border-radius: 1rem;
+  background: var(--color-sticker);
+  box-shadow: 4px 4px 0 var(--color-ink);
+  transform: rotate(-8deg);
+  animation: guest-tilt 700ms 180ms ease both;
+}
+
+.guest-peek-window {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 0.55rem;
+  background:
+    radial-gradient(circle at 50% 42%, var(--color-pop) 0 26%, transparent 27%),
+    linear-gradient(165deg, var(--color-sticker), var(--color-pop-wash));
+}
+
+.guest-peek-window img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  outline: none;
+}
+
+.guest-top:not(.is-plain) .guest-caption {
+  display: block;
+  padding-top: 2.8rem;
+}
+
+.guest-top:not(.is-plain) .guest-name {
+  width: 100%;
+}
+
+.guest-top:not(.is-plain) .guest-date {
+  position: absolute;
+  top: 0;
+  inset-inline-end: 0;
+  margin: 0;
+}
+
+.guest-top.is-plain .guest-caption {
+  top: 46%;
+  bottom: auto;
+  justify-content: center;
+  text-align: center;
+  transform: translateY(-50%);
+}
+
+.guest-top.is-plain .guest-name {
+  flex-basis: 100%;
+}
+
+.guest-top.is-plain .guest-date {
+  margin-bottom: 0;
+}
+
+.guest-body {
+  padding: 0.35rem 1.25rem calc(6.25rem + env(safe-area-inset-bottom, 0px));
+}
+
+.guest-magnets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.guest-magnets li {
+  display: flex;
+}
+
+.guest-steps {
+  margin: 0.85rem 0 0;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.guest-note {
+  position: absolute;
+  z-index: 4;
+  top: calc(0.75rem + env(safe-area-inset-top, 0px));
+  inset-inline-start: 0.75rem;
+  max-width: min(16rem, calc(100% - 7.5rem));
+  margin: 0;
+  padding: 0.7rem 0.85rem;
+  border: 3px solid var(--color-ink);
+  border-radius: 1rem;
+  background: var(--color-sticker);
+  color: var(--color-ink);
+  box-shadow: 3px 3px 0 var(--color-ink);
+  font-size: 1rem;
+  line-height: 1.35;
+  transform: rotate(-1.5deg);
+}
+
+.guest-privacy {
+  margin: 1rem 0 0;
+  font-size: 0.875rem;
+}
+
+.guest-privacy a {
+  color: var(--color-ink);
+  text-underline-offset: 0.15em;
+}
+
+.guest-shoot {
+  position: fixed;
+  z-index: 30;
+  right: 1rem;
+  left: 1rem;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  width: auto;
+  max-width: 36rem;
+  min-height: 3.5rem;
+  margin-inline: auto;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border: 3px solid var(--color-ink);
+  border-radius: 999px;
+  background: var(--color-pop);
+  color: var(--color-ink);
+  box-shadow: 4px 4px 0 var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.guest-quiet {
+  position: relative;
+  display: flex;
+  min-height: 100dvh;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: calc(1.5rem + env(safe-area-inset-top, 0px)) 1.25rem
+    calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  background: var(--color-paper);
+}
+
+.guest-quiet .guest-fallback {
+  position: absolute;
+}
+
+.guest-quiet-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 22rem);
+  padding: 1.35rem 1.15rem 1.2rem;
+  border: 3px solid var(--color-ink);
+  border-radius: 1.25rem;
+  background: var(--color-paper);
+  box-shadow: 4px 4px 0 var(--color-ink);
+}
+
+.guest-home {
+  display: flex;
+  min-height: 3rem;
+  margin-top: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid var(--color-ink);
+  border-radius: 999px;
+  background: var(--color-pop);
+  color: var(--color-ink);
+  box-shadow: 3px 3px 0 var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+}
+
+@keyframes guest-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes guest-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes guest-drop-date {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) rotate(-6deg);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-6deg);
+  }
+}
+
+@keyframes guest-tilt {
+  from {
+    opacity: 0;
+    transform: rotate(8deg) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-8deg);
   }
 }

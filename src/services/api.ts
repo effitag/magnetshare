@@ -399,7 +399,16 @@ export async function guestMagnetsLeft(eventId: string, quota: number): Promise<
   return Math.max(0, quota - used);
 }
 
-export async function signedMediaUrl(path: string): Promise<string | null> {
+export async function signedMediaUrl(
+  path: string,
+  size?: { width: number; resize?: "cover" | "contain" },
+): Promise<string | null> {
+  if (size) {
+    const sized = await supabase.storage.from("media").createSignedUrl(path, 60 * 30, {
+      transform: { width: size.width, resize: size.resize ?? "cover", quality: 70 },
+    });
+    if (!sized.error && sized.data?.signedUrl) return sized.data.signedUrl;
+  }
   const { data, error } = await supabase.storage.from("media").createSignedUrl(path, 60 * 30);
   if (error || !data?.signedUrl) return null;
   return data.signedUrl;
