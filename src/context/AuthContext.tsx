@@ -7,9 +7,15 @@ type AuthValue = {
   session: Session | null;
   user: User | null;
   isAdmin: boolean;
+  signInWithGoogle: () => Promise<void>;
+  signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
+
+function anonymous(user: User | null | undefined): boolean {
+  return user?.is_anonymous === true;
+}
 
 async function readIsAdmin(): Promise<boolean> {
   const { data, error } = await supabase.rpc("is_admin");
@@ -27,11 +33,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     function apply(next: Session | null) {
       setSession(next);
-      if (!next?.user) {
+      if (!next?.user || anonymous(next.user)) {
         setIsAdmin(false);
         setLoading(false);
         return;
       }
+      setLoading(true);
       void readIsAdmin().then((admin) => {
         if (!active) return;
         setIsAdmin(admin);
@@ -66,7 +73,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       session,
       user: session?.user ?? null,
-      isAdmin,
+      isAdmin: Boolean(session?.user) && !anonymous(session?.user) && isAdmin,
+      signInWithGoogle: async () => {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: { redirectTo: `${window.location.origin}/admin` },
+        });
+        if (error) throw error;
+      },
+      signOut: async () => {
+        await supabase.auth.signOut();
+      },
     }),
     [loading, session, isAdmin],
   );
