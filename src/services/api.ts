@@ -1,237 +1,235 @@
-import type { Session } from "@supabase/supabase-js";
-import { prepareCover } from "@/lib/prepare-image";
-import { isSchemaMissing, toAppError } from "@/lib/errors";
+import { toAppError } from "@/lib/errors";
 import { supabase } from "@/lib/supabase";
-import type { CreateEventInput, CreatedEvent, EventRow, Profile } from "@/services/types";
+import { isFrameObjectPath } from "@/features/studio/storage/paths";
+import type { EventCard, Frame, NewLeadInput } from "@/services/types";
 
-export type { CreateEventInput, CreatedEvent, EventRow, EventStatus, EventType, Profile, ProfileRole } from "@/services/types";
-
-const SESSION_FALLBACK = "לא הצלחנו לשחזר את ההתחברות. רעננו את העמוד ונסו שוב.";
-const AUTH_FALLBACK = "הפעולה לא הושלמה. בדקו את הפרטים ונסו שוב.";
-
-function slug(): string {
-  const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
-  const bytes = new Uint8Array(8);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
-}
-
-function safeFileName(name: string): string {
-  const cleaned = name.toLowerCase().replace(/[^a-z0-9.]+/g, "-").replace(/^-|-$/g, "");
-  return cleaned.slice(0, 40) || "cover.jpg";
-}
-
-export function photoCount(event: EventRow): number {
-  const photos = event.photos;
-  if (Array.isArray(photos) && photos[0] && typeof photos[0].count === "number") {
-    return photos[0].count;
-  }
-  return 0;
-}
-
-export async function getSession(): Promise<Session | null> {
+export async function insertLead(input: NewLeadInput): Promise<void> {
   try {
-    const { data, error } = await supabase.auth.getSession();
-    if (error) throw error;
-    return data.session;
-  } catch (error) {
-    throw toAppError(error, SESSION_FALLBACK);
-  }
-}
-
-export function onAuthChange(handler: (session: Session | null) => void): () => void {
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-    handler(session);
-  });
-  return () => data.subscription.unsubscribe();
-}
-
-export async function signUp(email: string, password: string, displayName: string): Promise<{ needsEmailConfirm: boolean }> {
-  try {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { display_name: displayName.trim() },
-        emailRedirectTo: `${window.location.origin}/login`,
-      },
+    const { error } = await supabase.from("leads").insert({
+      organizer_name: input.organizer_name.trim(),
+      phone: input.phone.trim(),
+      event_name: input.event_name.trim(),
+      event_date: input.event_date || null,
+      place: input.place?.trim() || null,
+      guest_count_range: input.guest_count_range?.trim() || null,
+      frame_id: input.frame_id || null,
+      status: "new",
     });
     if (error) throw error;
-    return { needsEmailConfirm: !data.session };
   } catch (error) {
-    throw toAppError(error, "ההרשמה לא הושלמה. בדקו את הפרטים ונסו שוב.");
+    throw toAppError(error, "לא הצלחנו לשמור את הפרטים. בדקו את החיבור ונסו שוב.");
   }
 }
 
-export async function signIn(email: string, password: string): Promise<void> {
-  try {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-  } catch (error) {
-    throw toAppError(error, AUTH_FALLBACK);
-  }
-}
-
-export async function signOut(): Promise<void> {
-  try {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-  } catch (error) {
-    throw toAppError(error, "ההתנתקות לא הושלמה. רעננו את העמוד ונסו שוב.");
-  }
-}
-
-export async function fetchProfile(userId: string): Promise<Profile | null> {
+export async function getEventCardBySlug(slug: string): Promise<EventCard | null> {
   try {
     const { data, error } = await supabase
-      .from("profiles")
-      .select("id, display_name, role")
-      .eq("id", userId)
-      .maybeSingle();
-    if (error) {
-      if (isSchemaMissing(error)) return null;
-      throw error;
-    }
-    return data as Profile | null;
-  } catch (error) {
-    throw toAppError(error, "לא הצלחנו לטעון את הפרופיל. רעננו את העמוד.");
-  }
-}
-
-async function requireUserId(): Promise<string> {
-  const session = await getSession();
-  if (!session?.user) {
-    throw toAppError(new Error("auth"), "כדי להמשיך צריך להתחבר. עברו למסך ההתחברות.");
-  }
-  return session.user.id;
-}
-
-export async function listMyEvents(): Promise<EventRow[]> {
-  try {
-    const userId = await requireUserId();
-    const { data, error } = await supabase
-      .from("events")
-      .select("*, photos(count)")
-      .eq("owner_id", userId)
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    return (data ?? []) as EventRow[];
-  } catch (error) {
-    throw toAppError(error, "לא הצלחנו לטעון את האירועים. רעננו את העמוד ונסו שוב.");
-  }
-}
-
-export async function getMyEvent(eventId: string): Promise<EventRow> {
-  try {
-    const userId = await requireUserId();
-    const { data, error } = await supabase
-      .from("events")
-      .select("*, photos(count)")
-      .eq("id", eventId)
-      .eq("owner_id", userId)
+      .from("event_cards")
+      .select("id, slug, title, event_date, place, frame_id, print_quota, status")
+      .eq("slug", slug)
       .maybeSingle();
     if (error) throw error;
-    if (!data) {
-      throw toAppError(new Error("missing"), "האירוע לא נמצא, או שאין לכם הרשאה לראות אותו. חזרו לרשימת האירועים.");
-    }
-    return data as EventRow;
-  } catch (error) {
-    throw toAppError(error, "לא הצלחנו לפתוח את האירוע. חזרו לרשימה ונסו שוב.");
-  }
-}
-
-export async function getPublicEventBySlug(slugValue: string): Promise<EventRow | null> {
-  try {
-    const { data, error } = await supabase
-      .from("events")
-      .select("*")
-      .eq("public_slug", slugValue)
-      .in("status", ["active", "closed"])
-      .maybeSingle();
-    if (error) {
-      if (isSchemaMissing(error)) return null;
-      throw error;
-    }
-    return (data as EventRow | null) ?? null;
+    return (data as EventCard | null) ?? null;
   } catch (error) {
     throw toAppError(error, "לא הצלחנו לפתוח את האירוע. בדקו את הקישור ונסו שוב.");
   }
 }
 
-async function uploadCover(eventId: string, file: File): Promise<string> {
-  const blob = await prepareCover(file);
-  const path = `${eventId}/covers/${Date.now()}_${safeFileName(file.name)}`;
-  const { error } = await supabase.storage.from("media").upload(path, blob, {
-    contentType: "image/jpeg",
-    upsert: false,
-  });
-  if (error) throw error;
+export async function listPublishedFrames(): Promise<Frame[]> {
+  try {
+    const { data, error } = await supabase
+      .from("frames")
+      .select(
+        "id, name, width_mm, height_mm, overlay_path, window_x, window_y, window_w, window_h, is_published, created_at",
+      )
+      .eq("is_published", true)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return (data ?? []) as Frame[];
+  } catch (error) {
+    throw toAppError(error, "לא הצלחנו לטעון את המסגרות. רעננו את העמוד ונסו שוב.");
+  }
+}
+
+function frameJoin(value: unknown): { name?: string; is_published?: boolean } {
+  const row = Array.isArray(value) ? value[0] : value;
+  return (row ?? {}) as { name?: string; is_published?: boolean };
+}
+
+function frameRow(row: Record<string, unknown>) {
+  const design = (row.design ?? null) as { size?: unknown; tags?: unknown } | null;
+  return {
+    id: row.id,
+    name: row.name,
+    updated_at: row.updated_at,
+    revision: row.revision,
+    is_template: row.is_template,
+    is_published: row.is_published === true,
+    size: design?.size,
+    tags: design?.tags,
+    doc: design,
+  };
+}
+
+export const frameGateway = {
+  async listTemplates() {
+    const { data, error } = await supabase
+      .from("frames")
+      .select("id, name, updated_at, revision, is_template, is_published, design")
+      .order("updated_at", { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map((row) => frameRow(row as Record<string, unknown>));
+  },
+  async getTemplate(id: string) {
+    const { data, error } = await supabase
+      .from("frames")
+      .select("id, name, revision, is_template, design")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? frameRow(data as Record<string, unknown>) : null;
+  },
+  async getRevision(id: string) {
+    const { data, error } = await supabase.from("frames").select("revision").eq("id", id).maybeSingle();
+    if (error) throw error;
+    return data?.revision ?? null;
+  },
+  async insertTemplate(row: Record<string, unknown>) {
+    const { data, error } = await supabase
+      .from("frames")
+      .insert({
+        id: row.id,
+        name: row.name,
+        design: row.doc,
+        width_mm: row.width_mm,
+        height_mm: row.height_mm,
+        bleed_mm: row.bleed_mm,
+        safe_mm: row.safe_mm,
+        window_x: row.window_x,
+        window_y: row.window_y,
+        window_w: row.window_w,
+        window_h: row.window_h,
+        is_template: row.is_template !== false,
+        is_published: false,
+      })
+      .select("revision")
+      .single();
+    if (error) throw error;
+    return { revision: data.revision as number };
+  },
+  async updateTemplate(id: string, patch: Record<string, unknown>, expectedRevision: number) {
+    const changes: Record<string, unknown> = {};
+    if (patch.name !== undefined) changes.name = patch.name;
+    if (patch.doc !== undefined) changes.design = patch.doc;
+    for (const key of [
+      "width_mm",
+      "height_mm",
+      "bleed_mm",
+      "safe_mm",
+      "window_x",
+      "window_y",
+      "window_w",
+      "window_h",
+      "is_published",
+      "overlay_path",
+      "preview_path",
+    ]) {
+      if (patch[key] !== undefined) changes[key] = patch[key];
+    }
+    const { data, error } = await supabase
+      .from("frames")
+      .update(changes)
+      .eq("id", id)
+      .eq("revision", expectedRevision)
+      .select("revision");
+    if (error) throw error;
+    return data ?? [];
+  },
+  async deleteTemplate(id: string) {
+    const { error } = await supabase.from("frames").delete().eq("id", id);
+    if (error) throw error;
+  },
+  async upload(key: string, blob: Blob, options: { contentType?: string; upsert?: boolean }) {
+    if (!isFrameObjectPath(key)) throw new Error("invalid_storage_path");
+    const { error } = await supabase.storage.from("media").upload(key, blob, {
+      contentType: options.contentType,
+      upsert: options.upsert === true,
+    });
+    if (error) throw error;
+  },
+  async download(key: string) {
+    const { data, error } = await supabase.storage.from("media").download(key);
+    if (error) throw error;
+    return data;
+  },
+  async list(prefix: string) {
+    const { data, error } = await supabase.storage.from("media").list(prefix, { limit: 100 });
+    if (error) throw error;
+    return data ?? [];
+  },
+  async remove(keys: string[]) {
+    if (!keys.length) return;
+    const { error } = await supabase.storage.from("media").remove(keys);
+    if (error) throw error;
+  },
+  async signedUrls(keys: string[], expiresInSeconds: number) {
+    if (!keys.length) return [];
+    const { data, error } = await supabase.storage.from("media").createSignedUrls(keys, expiresInSeconds);
+    if (error) throw error;
+    return data ?? [];
+  },
+};
+
+export async function uploadGuestPhoto(eventId: string, guestId: string, file: File): Promise<string> {
+  const safeName = file.name.replace(/[^\w.-]+/g, "_");
+  const path = `${eventId}/${guestId}/${Date.now()}_${safeName}`;
+  if (path.split("/")[0] === "frames") {
+    throw toAppError(new Error("frames"), "אי אפשר לשמור קובץ של אורח בתיקיית המסגרות.");
+  }
+  const { error } = await supabase.storage.from("media").upload(path, file, { upsert: false });
+  if (error) throw toAppError(error, "לא הצלחנו לשמור את התמונה. נסו שוב.");
   return path;
 }
 
-export async function createEvent(input: CreateEventInput): Promise<CreatedEvent> {
-  const userId = await requireUserId();
-  let lastError: unknown = null;
+export type AdminEventRow = {
+  id: string;
+  title: string;
+  status: string;
+  frame_id: string;
+  frame_name: string;
+  frame_published: boolean;
+};
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      const { data, error } = await supabase
-        .from("events")
-        .insert({
-          owner_id: userId,
-          name: input.name.trim(),
-          description: input.description.trim(),
-          event_date: input.eventDate,
-          type: input.type,
-          public_slug: slug(),
-          status: input.open ? "active" : "closed",
-          moderation_required: input.moderationRequired,
-        })
-        .select("*")
-        .single();
-      if (error) throw error;
-      const event = data as EventRow;
-      if (!input.cover) return event;
-
-      try {
-        const coverPath = await uploadCover(event.id, input.cover);
-        const { data: updated, error: updateError } = await supabase
-          .from("events")
-          .update({ cover_path: coverPath })
-          .eq("id", event.id)
-          .eq("owner_id", userId)
-          .select("*")
-          .single();
-        if (updateError) throw updateError;
-        return updated as EventRow;
-      } catch (coverError) {
-        return {
-          ...event,
-          coverWarning: toAppError(
-            coverError,
-            "האירוע נוצר, אבל תמונת השער לא עלתה. אפשר להמשיך בלי תמונה.",
-          ).message,
-        };
-      }
-    } catch (error) {
-      const code = typeof error === "object" && error && "code" in error ? String((error as { code: string }).code) : "";
-      lastError = error;
-      if (code === "23505") continue;
-      throw toAppError(error, "לא הצלחנו ליצור את האירוע. בדקו את החיבור ונסו שוב.");
-    }
-  }
-
-  throw toAppError(lastError, "לא הצלחנו ליצור קישור ייחודי לאירוע. נסו שוב.");
+export async function listAdminEvents(): Promise<AdminEventRow[]> {
+  const { data, error } = await supabase
+    .from("events")
+    .select("id, title, status, frame_id, frame:frames(name, is_published)")
+    .order("created_at", { ascending: false });
+  if (error) throw toAppError(error, "לא הצלחנו לטעון את האירועים.");
+  return (data ?? []).map((row) => {
+    const frame = frameJoin(row.frame);
+    return {
+      id: row.id,
+      title: row.title,
+      status: row.status,
+      frame_id: row.frame_id,
+      frame_name: frame.name ?? "מסגרת",
+      frame_published: frame.is_published === true,
+    };
+  });
 }
 
-export async function signedCoverUrls(paths: string[]): Promise<Record<string, string>> {
-  const unique = [...new Set(paths.filter(Boolean))];
-  const pairs = await Promise.all(
-    unique.map(async (path) => {
-      const { data, error } = await supabase.storage.from("media").createSignedUrl(path, 60 * 60);
-      if (error || !data?.signedUrl) return [path, ""] as const;
-      return [path, data.signedUrl] as const;
-    }),
-  );
-  return Object.fromEntries(pairs);
+export async function setEventLive(eventId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("events")
+    .select("id, frame:frames(name, is_published)")
+    .eq("id", eventId)
+    .single();
+  if (error) throw toAppError(error, "לא הצלחנו לבדוק את האירוע.");
+  const frame = frameJoin(data.frame);
+  if (frame.is_published !== true) {
+    throw new Error(`כדי להפעיל את האירוע, פרסמו קודם את המסגרת "${frame.name ?? "מסגרת"}".`);
+  }
+  const update = await supabase.from("events").update({ status: "live" }).eq("id", eventId);
+  if (update.error) throw toAppError(update.error, "לא הצלחנו להפעיל את האירוע.");
 }

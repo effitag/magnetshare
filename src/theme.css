@@ -26,6 +26,7 @@
   --marquee-duration: 18s;
   --marquee-tilt: -4.5deg;
   --sticker-stroke: 2px;
+  --color-pop-wash: #dceef5;
 }
 
 .sticker {
@@ -52,7 +53,7 @@
 .marquee {
   width: 120%;
   margin-inline: -10%;
-  margin-block: 0.5rem 1.25rem;
+  margin-block: 5vw 1.25rem;
   overflow: hidden;
   background: var(--color-pop);
   color: var(--color-ink);
@@ -159,11 +160,12 @@
 .fab {
   position: fixed;
   z-index: 30;
-  bottom: 1.25rem;
-  inset-inline-end: 1.25rem;
+  bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  inset-inline-end: calc(1.25rem + env(safe-area-inset-inline-end, 0px));
   display: inline-flex;
-  min-height: 3.25rem;
-  max-width: calc(100% - 2.5rem);
+  min-height: 3rem;
+  gap: 0.5rem;
+  max-width: calc(100% - 2.5rem - env(safe-area-inset-inline-start, 0px) - env(safe-area-inset-inline-end, 0px));
   align-items: center;
   justify-content: center;
   padding-inline: 1.25rem;
@@ -176,6 +178,91 @@
   font-size: 1.05rem;
   line-height: 1.05;
   text-align: center;
+}
+
+.gallery-card {
+  position: relative;
+  width: min(100%, 11rem);
+  aspect-ratio: 4 / 5;
+  margin-inline: auto;
+  overflow: hidden;
+  background: var(--color-sticker);
+  border: 3px solid var(--color-ink);
+  border-radius: 1.2rem;
+  padding: 0.35rem;
+  box-shadow: 4px 4px 0 var(--color-ink);
+}
+
+.gallery-card img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0.75rem;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(1.9rem, 8vw, 3.1rem);
+  line-height: 0.95;
+  color: var(--color-sticker);
+  -webkit-text-stroke: var(--sticker-stroke) var(--color-ink);
+  paint-order: stroke fill;
+  text-shadow:
+    -1px -1px 0 var(--color-ink),
+    1px -1px 0 var(--color-ink),
+    -1px 1px 0 var(--color-ink),
+    1px 1px 0 var(--color-ink),
+    3px 3px 0 var(--color-ink);
+}
+
+.sticker-card {
+  border: 3px solid var(--color-ink);
+  border-radius: 1.25rem;
+  background: var(--color-sticker);
+  box-shadow: 4px 4px 0 var(--color-ink);
+}
+
+.sticker-flat {
+  box-shadow: none;
+}
+
+.tilt-a {
+  transform: rotate(-1.5deg);
+}
+
+.tilt-b {
+  transform: rotate(1.5deg);
+}
+
+.band {
+  background: var(--color-paper);
+}
+
+.band-wash {
+  background: var(--color-pop-wash);
+}
+
+.band-white {
+  background: var(--color-surface);
+}
+
+.wave {
+  display: block;
+  width: 100%;
+  height: 2.25rem;
+  margin-bottom: -1px;
+}
+
+.step-icon {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.field-scroll {
+  scroll-margin-bottom: 40vh;
+  scroll-margin-top: 20vh;
 }
 
 @media (prefers-reduced-motion: reduce) {

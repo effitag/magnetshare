@@ -1,68 +1,52 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { PreviewBridge } from "@/components/PreviewBridge";
-import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { AuthProvider } from "@/context/AuthContext";
-import { ForgotPasswordPage } from "@/features/auth/ForgotPasswordPage";
-import { LoginPage } from "@/features/auth/LoginPage";
-import { RequireAuth } from "@/features/auth/RequireAuth";
-import { SignupPage } from "@/features/auth/SignupPage";
-import { GuestSoonPage } from "@/features/guest/GuestSoonPage";
+import { EventsPanel } from "@/features/admin/EventsPanel";
+import { AdminEmpty, AdminGate } from "@/features/admin/AdminScreens";
 import { HomePage } from "@/features/home/HomePage";
+import { LegalPage } from "@/features/home/LegalPage";
 import { NotFoundPage } from "@/features/home/NotFoundPage";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
 
-const DashboardPage = lazy(() => import("@/features/dashboard/DashboardPage"));
-const WizardPage = lazy(() => import("@/features/events/WizardPage"));
-const EventManagePage = lazy(() => import("@/features/events/EventManagePage"));
-const PrintQrPage = lazy(() => import("@/features/events/PrintQrPage"));
+const DevOnlyPreviewBridge = import.meta.env.DEV
+  ? lazy(() =>
+      import("@/components/PreviewBridge").then((module) => ({
+        default: module.PreviewBridge,
+      })),
+    )
+  : null;
+
+const FramesTab = lazy(() => import("@/features/studio/FramesTab"));
 
 export function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <PreviewBridge />
-        <Suspense fallback={<LoadingScreen />}>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignupPage />} />
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        {DevOnlyPreviewBridge ? (
+          <Suspense fallback={null}>
+            <DevOnlyPreviewBridge />
+          </Suspense>
+        ) : null}
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/privacy" element={<LegalPage kind="privacy" />} />
+          <Route path="/terms" element={<LegalPage kind="terms" />} />
+          <Route path="/accessibility" element={<LegalPage kind="accessibility" />} />
+          <Route path="/admin" element={<AdminGate />}>
+            <Route index element={<EventsPanel />} />
+            <Route path="queue" element={<AdminEmpty title="תור הדפסה" />} />
             <Route
-              path="/dashboard"
+              path="frames/*"
               element={
-                <RequireAuth>
-                  <DashboardPage />
-                </RequireAuth>
+                <Suspense fallback={<LoadingScreen />}>
+                  <FramesTab />
+                </Suspense>
               }
             />
-            <Route
-              path="/events/new"
-              element={
-                <RequireAuth>
-                  <WizardPage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/events/:eventId"
-              element={
-                <RequireAuth>
-                  <EventManagePage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/events/:eventId/print"
-              element={
-                <RequireAuth>
-                  <PrintQrPage />
-                </RequireAuth>
-              }
-            />
-            <Route path="/e/:slug" element={<GuestSoonPage />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
-        </Suspense>
+            <Route path="leads" element={<AdminEmpty title="פניות" />} />
+          </Route>
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
       </BrowserRouter>
     </AuthProvider>
   );

@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { installPreviewHostBridge } from "@/lib/preview-host-bridge";
 
-const PATHS = ["/", "/login", "/signup", "/forgot-password", "/dashboard", "/events/new", "/e/:slug"];
+const PATHS = ["/", "/privacy", "/terms", "/accessibility", "/admin", "/admin/queue", "/admin/frames", "/admin/leads"];
 
 export function PreviewBridge() {
   const navigate = useNavigate();

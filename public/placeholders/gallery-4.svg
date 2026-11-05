@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="800" viewBox="0 0 640 800">
+  <rect width="640" height="800" fill="#D4A054"/>
+  <rect x="90" y="90" width="460" height="500" rx="80" fill="#9ADCFF"/>
+  <text x="320" y="720" text-anchor="middle" font-family="Rubik, sans-serif" font-size="42" fill="#1C1416">להחלפה</text>
+</svg>
