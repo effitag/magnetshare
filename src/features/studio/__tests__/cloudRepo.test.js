@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createCloudRepo } from '@/features/studio/storage/cloudRepo';
-import { assetFileName, frameFolder, imageTypeOf } from '@/features/studio/storage/paths';
+import { assetFileName, frameFolder, imageTypeOf, isFrameObjectPath } from '@/features/studio/storage/paths';
 import { isNetworkError } from '@/features/studio/storage/errors';
 import { createMemoryGateway } from '@/features/studio/storage/memoryGateway';
 
@@ -21,6 +21,15 @@ describe('storage paths', () => {
 
   it('avoids names already taken in the folder', () => {
     expect(assetFileName('logo.png', 'image/png', ['logo.png', 'LOGO-2.png'])).toBe('logo-3.png');
+  });
+
+  it('allows overlay, preview, and the camera screen file only', () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    expect(isFrameObjectPath(`frames/${id}/overlay.png`)).toBe(true);
+    expect(isFrameObjectPath(`frames/${id}/preview.png`)).toBe(true);
+    expect(isFrameObjectPath(`frames/${id}/screen.webp`)).toBe(true);
+    expect(isFrameObjectPath(`frames/${id}/logo.png`)).toBe(false);
+    expect(isFrameObjectPath(`frames/${id}/screen.png`)).toBe(false);
   });
 
   it('accepts only PNG, JPG, WEBP and SVG', () => {
@@ -119,6 +128,21 @@ describe('cloud repo', () => {
     expect([...gateway.files.keys()]).toEqual([`frames/${other.id}/preview.png`]);
   });
 
+  it('writes the print file and the camera file, and unpublish leaves both in place', async () => {
+    const template = await repo.create('חתונה');
+    const event = await repo.duplicateForEvent(template.id);
+    await expect(repo.publish(template.id, { overlay: new Blob(['o']), screen: new Blob(['s']) })).rejects.toThrow(/template_not_publishable/);
+    await repo.publish(event.id, { overlay: new Blob(['overlay']), screen: new Blob(['screen']) });
+    expect(gateway.files.get(`frames/${event.id}/overlay.png`).contentType).toBe('image/png');
+    expect(gateway.files.get(`frames/${event.id}/screen.webp`).contentType).toBe('image/webp');
+    expect(gateway.rows.get(event.id).is_published).toBe(true);
+    await repo.unpublish(event.id);
+    expect(gateway.rows.get(event.id).is_published).toBe(false);
+    expect([...gateway.files.keys()].sort()).toEqual([
+      `frames/${event.id}/overlay.png`,
+      `frames/${event.id}/screen.webp`,
+    ]);
+  });
   it('turns a dropped connection into a network error the editor can recognise', async () => {
     gateway.offline = true;
     const err = await repo.list().catch((e) => e);

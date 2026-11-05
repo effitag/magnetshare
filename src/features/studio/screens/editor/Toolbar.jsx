@@ -4,7 +4,7 @@ import Icon from '@/features/studio/ui/icons';
 import { notify } from '@/features/studio/ui/toast';
 import { createImage, createPhotoArea, createShape, createText } from '@/features/studio/model/schema';
 import { sanitizeName, splitExtension } from '@/features/studio/model/names';
-import { renderPrintPng } from '@/features/studio/render/renderToCanvas';
+import { renderPrintPng, renderScreenWebp } from '@/features/studio/render/renderToCanvas';
 import { downloadBlob } from '@/features/studio/storage/backupZip';
 import { useDoc, useEditor } from '@/features/studio/store/editorStore';
 import { useEditorContext } from './EditorContext';
@@ -56,8 +56,10 @@ export default function Toolbar({ status, onClose }) {
     }
     setExporting(true);
     try {
-      const blob = await renderPrintPng(doc, ctx.assets);
-      await ctx.repo.publish(ctx.templateId, blob);
+      await ctx.repo.publish(ctx.templateId, {
+        overlay: await renderPrintPng(doc, ctx.assets),
+        screen: await renderScreenWebp(doc, ctx.assets),
+      });
       notify('המסגרת פורסמה. עכשיו אפשר להפעיל את האירוע.');
     } catch (err) {
       console.error('[toolbar] publish failed:', err);

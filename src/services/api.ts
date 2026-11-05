@@ -1,5 +1,6 @@
 import { toAppError } from "@/lib/errors";
 import { supabase } from "@/lib/supabase";
+import { isFrameObjectPath } from "@/features/studio/storage/paths";
 import type { EventCard, Frame, NewLeadInput } from "@/services/types";
 
 export async function insertLead(input: NewLeadInput): Promise<void> {
@@ -49,8 +50,6 @@ export async function listPublishedFrames(): Promise<Frame[]> {
     throw toAppError(error, "לא הצלחנו לטעון את המסגרות. רעננו את העמוד ונסו שוב.");
   }
 }
-
-const FRAME_FILE = /^frames\/[0-9a-f-]{36}\/(overlay|preview)\.png$/i;
 
 function frameJoin(value: unknown): { name?: string; is_published?: boolean } {
   const row = Array.isArray(value) ? value[0] : value;
@@ -151,7 +150,7 @@ export const frameGateway = {
     if (error) throw error;
   },
   async upload(key: string, blob: Blob, options: { contentType?: string; upsert?: boolean }) {
-    if (!FRAME_FILE.test(key)) throw new Error("invalid_storage_path");
+    if (!isFrameObjectPath(key)) throw new Error("invalid_storage_path");
     const { error } = await supabase.storage.from("media").upload(key, blob, {
       contentType: options.contentType,
       upsert: options.upsert === true,

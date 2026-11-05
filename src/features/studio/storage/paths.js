@@ -9,7 +9,18 @@ import { UnsupportedImageError } from './errors';
 
 export const PREVIEW_FILE = 'preview.png';
 export const OVERLAY_FILE = 'overlay.png';
+export const SCREEN_FILE = 'screen.webp';
+export const FRAME_FILES = [OVERLAY_FILE, PREVIEW_FILE, SCREEN_FILE];
 export const THUMBNAIL_FILE = PREVIEW_FILE;
+
+const FRAME_OBJECT = new RegExp(
+  `^frames/[0-9a-f-]{36}/(?:${FRAME_FILES.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})$`,
+  'i',
+);
+
+export function isFrameObjectPath(key) {
+  return FRAME_OBJECT.test(key ?? '');
+}
 
 export const frameFolder = (frameId) => `frames/${frameId}`;
 export const frameObjectPath = (frameId, fileName) => `${frameFolder(frameId)}/${fileName}`;

@@ -42,14 +42,33 @@ export async function renderThumbnail(doc, assets) {
 /** Print files are 25 px per mm: a 10×7.5 cm magnet is 2500×1875 px, the size print software expects. */
 export const PRINT_PX_PER_MM = 25;
 
+/** The camera loads this, not the print file. The longest side is 1080 px. */
+export const SCREEN_LONG_EDGE_PX = 1080;
+
 export function printPixelSize({ widthMm, heightMm }) {
   return { width: Math.round(widthMm * PRINT_PX_PER_MM), height: Math.round(heightMm * PRINT_PX_PER_MM) };
+}
+
+export function screenPxPerMm({ widthMm, heightMm }) {
+  const long = Math.max(Number(widthMm) || 1, Number(heightMm) || 1);
+  return SCREEN_LONG_EDGE_PX / long;
 }
 
 /** The print file: the cut-line area only, with the photo window transparent. */
 export async function renderPrintPng(doc, assets) {
   const canvas = await renderFrameToCanvas(doc, { assets, pxPerMm: PRINT_PX_PER_MM, area: 'trim', photo: 'cutout' });
   return canvasToBlob(canvas);
+}
+
+/** Same cutout as the print file, small enough for a phone. */
+export async function renderScreenWebp(doc, assets) {
+  const canvas = await renderFrameToCanvas(doc, {
+    assets,
+    pxPerMm: screenPxPerMm(doc.size),
+    area: 'trim',
+    photo: 'cutout',
+  });
+  return canvasToBlob(canvas, 'image/webp');
 }
 
 export function canvasToBlob(canvas, type = 'image/png') {

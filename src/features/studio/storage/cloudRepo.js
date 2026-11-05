@@ -3,7 +3,7 @@
 import { DEFAULT_SIZE, migrateTemplate } from '@/features/studio/model/schema';
 import { createPresetDoc, DEFAULT_PRESET } from '@/features/studio/model/presets';
 import { ConflictError, NotFoundError, UnsupportedImageError } from './errors';
-import { frameFolder, frameObjectPath, imageTypeOf, OVERLAY_FILE, PREVIEW_FILE } from './paths';
+import { frameFolder, frameObjectPath, imageTypeOf, OVERLAY_FILE, PREVIEW_FILE, SCREEN_FILE } from './paths';
 
 const THUMBNAIL_URL_SECONDS = 60 * 60;
 
@@ -167,13 +167,18 @@ export function createCloudRepo(gateway) {
       await gateway.upload(frameObjectPath(id, OVERLAY_FILE), blob, { contentType: 'image/png', upsert: true });
     },
 
-    async publish(id, overlayBlob) {
+    async saveScreen(id, blob) {
+      await gateway.upload(frameObjectPath(id, SCREEN_FILE), blob, { contentType: 'image/webp', upsert: true });
+    },
+
+    async publish(id, { overlay, screen }) {
       const row = await gateway.getTemplate(id);
       if (!row) throw new NotFoundError();
       if (row.is_template === true) {
         throw Object.assign(new Error('template_not_publishable'), { name: 'TemplateError' });
       }
-      await repo.saveOverlay(id, overlayBlob);
+      await repo.saveOverlay(id, overlay);
+      await repo.saveScreen(id, screen);
       const rows = await gateway.updateTemplate(
         id,
         {

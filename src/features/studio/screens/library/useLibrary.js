@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { notify } from '@/features/studio/ui/toast';
 import { createPresetDoc } from '@/features/studio/model/presets';
-import { renderPrintPng } from '@/features/studio/render/renderToCanvas';
+import { renderPrintPng, renderScreenWebp } from '@/features/studio/render/renderToCanvas';
 import { backupFileName, downloadBlob, exportAllTemplates, importBackup } from '@/features/studio/storage/backupZip';
 import { createAssetCache } from '@/features/studio/storage/assetCache';
 import { uploadBuiltinImages } from '@/features/studio/storage/builtinImages';
@@ -109,7 +109,10 @@ export function useLibrary(repo, onOpen) {
     const ok = await attempt(async () => {
       const { doc } = await repo.load(item.id);
       const assets = createAssetCache((path) => repo.readAsset(item.id, path));
-      await repo.publish(item.id, await renderPrintPng(doc, assets));
+      await repo.publish(item.id, {
+        overlay: await renderPrintPng(doc, assets),
+        screen: await renderScreenWebp(doc, assets),
+      });
     }, 'לא הצלחנו לפרסם את המסגרת. נסו שוב.');
     if (ok) {
       notify('המסגרת פורסמה. עכשיו אפשר להפעיל את האירוע.', 'info');

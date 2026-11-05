@@ -142,7 +142,7 @@ describe('elements', () => {
 });
 
 describe('print file size', async () => {
-  const { printPixelSize } = await import('@/features/studio/render/renderToCanvas');
+  const { printPixelSize, screenPxPerMm, SCREEN_LONG_EDGE_PX } = await import('@/features/studio/render/renderToCanvas');
   const { presetSize } = await import('@/features/studio/model/presets');
 
   it('is 2500×1875 for the regular magnet, the size print software expects', () => {
@@ -153,5 +153,13 @@ describe('print file size', async () => {
   it('keeps 25 px per mm for the other sizes', () => {
     expect(printPixelSize(presetSize('large', 'landscape'))).toEqual({ width: 3750, height: 2500 });
     expect(printPixelSize(presetSize('square', 'landscape'))).toEqual({ width: 2500, height: 2500 });
+  });
+
+  it('keeps the camera file at a longest side of 1080 px', () => {
+    for (const size of [presetSize('regular', 'landscape'), presetSize('regular', 'portrait'), presetSize('large', 'landscape')]) {
+      const px = screenPxPerMm(size);
+      const long = Math.max(size.widthMm, size.heightMm);
+      expect(Math.round(long * px)).toBe(SCREEN_LONG_EDGE_PX);
+    }
   });
 });
