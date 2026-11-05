@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
 
 const phrases = [
   "בלי הורדת אפליקציה",
@@ -13,17 +12,12 @@ const shots = [
 ];
 
 export function HomePage() {
-  const { user } = useAuth();
-  const cta = "/magnet/lead";
   const loop = [...phrases, ...phrases];
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-paper pb-32">
-      <header className="flex items-center justify-between px-4 pt-4">
+      <header className="px-4 pt-4">
         <p className="font-display text-lg text-primary">MagnetimShare</p>
-        <Link to={user ? "/dashboard" : "/login"} className="inline-flex min-h-11 items-center text-sm font-medium text-primary">
-          {user ? "האירועים" : "התחברות"}
-        </Link>
       </header>
 
       <div className="marquee" aria-hidden="true">
@@ -53,7 +47,7 @@ export function HomePage() {
         </div>
       </section>
 
-      <Link to={cta} className="fab">
+      <Link to="/magnet/lead" className="fab">
         לפרטים ולהזמנה
       </Link>
     </div>
