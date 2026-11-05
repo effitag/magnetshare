@@ -80,7 +80,7 @@ export default function Toolbar({ status, onClose }) {
   }
 
   return (
-    <header className="h-12 shrink-0 flex items-center gap-1 border-b border-border bg-background px-2">
+    <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-1 border-b border-border bg-background px-2 py-1">
       <Button variant="ghost" onClick={onClose} className="px-2">
         <Icon name="back" />
         תבניות

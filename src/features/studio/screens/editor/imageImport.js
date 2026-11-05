@@ -3,8 +3,15 @@ import { isNetworkError } from '@/features/studio/storage/errors';
 
 export const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp,image/svg+xml';
 
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+
 /** Uploads a picked image to the template's cloud folder and returns { path, img }. */
 export async function importImage({ repo, templateId, assets }, file) {
+  if (file.size > MAX_IMAGE_BYTES) {
+    const error = new Error('payload too large');
+    error.statusCode = '413';
+    throw error;
+  }
   const path = await repo.uploadAsset(templateId, file);
   const img = await assets.put(path, file);
   return { path, img };

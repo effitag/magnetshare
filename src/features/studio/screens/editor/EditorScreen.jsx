@@ -60,7 +60,7 @@ export default function EditorScreen({ repo, templateId, onClose }) {
 
   return (
     <EditorContext.Provider value={context}>
-      <div className="h-screen flex flex-col">
+      <div className="flex h-dvh min-h-0 flex-col">
         <Toolbar status={sync.status} onClose={close} />
         <SyncBanner status={sync.status} online={online} onReload={sync.reloadLatest} onKeepMine={sync.keepMine} />
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">

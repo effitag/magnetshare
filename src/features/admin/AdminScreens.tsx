@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -86,32 +86,44 @@ function NoAccess() {
 
 function AdminShell() {
   const { signOut } = useAuth();
+  const { pathname } = useLocation();
+  const editingFrame = /^\/admin\/frames\/[^/]+/.test(pathname);
   return (
-    <div className="min-h-screen bg-paper pt-[env(safe-area-inset-top,0px)] pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]">
-      <header className="flex items-center justify-between px-4 pt-4">
-        <p className="font-display text-lg text-primary">MagnetimShare</p>
-        <button type="button" className="inline-flex min-h-11 items-center text-base text-ink" onClick={() => void signOut()}>
-          יציאה
-        </button>
-      </header>
+    <div
+      className={
+        editingFrame
+          ? "h-dvh overflow-hidden bg-paper"
+          : "min-h-screen bg-paper pt-[env(safe-area-inset-top,0px)] pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]"
+      }
+    >
+      {!editingFrame && (
+        <header className="flex items-center justify-between px-4 pt-4">
+          <p className="font-display text-lg text-primary">MagnetimShare</p>
+          <button type="button" className="inline-flex min-h-11 items-center text-base text-ink" onClick={() => void signOut()}>
+            יציאה
+          </button>
+        </header>
+      )}
       <Outlet />
-      <nav className="fixed inset-x-0 bottom-0 z-20 border-t-[3px] border-ink bg-sticker pb-[env(safe-area-inset-bottom,0px)]" aria-label="ניהול">
-        <ul className="flex">
-          {tabs.map((tab) => (
-            <li key={tab.to} className="flex-1">
-              <NavLink
-                to={tab.to}
-                end={tab.end}
-                className={({ isActive }) =>
-                  `flex min-h-12 items-center justify-center px-1 text-center text-base leading-tight ${isActive ? "bg-pop text-ink" : "text-ink"}`
-                }
-              >
-                {tab.label}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      {!editingFrame && (
+        <nav className="fixed inset-x-0 bottom-0 z-20 border-t-[3px] border-ink bg-sticker pb-[env(safe-area-inset-bottom,0px)]" aria-label="ניהול">
+          <ul className="flex">
+            {tabs.map((tab) => (
+              <li key={tab.to} className="flex-1">
+                <NavLink
+                  to={tab.to}
+                  end={tab.end}
+                  className={({ isActive }) =>
+                    `flex min-h-12 items-center justify-center px-1 text-center text-base leading-tight ${isActive ? "bg-pop text-ink" : "text-ink"}`
+                  }
+                >
+                  {tab.label}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
     </div>
   );
 }

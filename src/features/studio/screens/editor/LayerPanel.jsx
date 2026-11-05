@@ -43,7 +43,7 @@ export default function LayerPanel() {
   }
 
   return (
-    <aside className="w-60 shrink-0 border-s border-border bg-background flex flex-col min-h-0">
+    <aside className="flex max-h-[28vh] w-full shrink-0 flex-col border-t border-border bg-background md:h-full md:max-h-none md:w-60 md:border-s md:border-t-0 min-h-0">
       <h2 className="px-3 pt-3 pb-2 text-xs text-muted-foreground">שכבות</h2>
       <ul className="flex-1 overflow-y-auto px-1.5 pb-3" onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget) && drag && setDrag({ ...drag, over: null })}>
         {rows.map((el, i) => {

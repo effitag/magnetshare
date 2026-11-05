@@ -6,7 +6,7 @@ const INPUT =
   'h-8 w-full min-w-0 rounded-md bg-card border border-border px-2 text-sm text-foreground tabular-nums focus:outline-none focus:border-brand';
 
 export function FieldLabel({ children }) {
-  return <span className="text-xs text-muted-foreground">{children}</span>;
+  return <span className="block text-xs leading-4 text-muted-foreground">{children}</span>;
 }
 
 /**
@@ -78,7 +78,7 @@ export function ColorField({ label, value, onChange, allowNone = false }) {
         />
         <input
           dir="ltr"
-          className={INPUT}
+          className={`${INPUT} min-w-0 flex-1`}
           placeholder={allowNone ? 'ללא' : ''}
           value={draft ?? value ?? ''}
           onChange={(e) => setDraft(e.target.value)}

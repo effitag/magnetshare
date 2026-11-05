@@ -33,7 +33,7 @@ export function GeometryProps({ el }) {
   const setHeight = (v) => update(keepRatio ? { height: roundMm(v), width: roundMm((v * el.width) / el.height) } : { height: roundMm(v) }, 'height');
   return (
     <Section title="מיקום וגודל">
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-3">
         <NumberField label="X (משמאל)" suffix="מ״מ" value={el.x} onCommit={mm('x')} disabled={locked} />
         <NumberField label="Y (מלמעלה)" suffix="מ״מ" value={el.y} onCommit={mm('y')} disabled={locked} />
         <NumberField label="רוחב" suffix="מ״מ" value={el.width} min={0.1} onCommit={setWidth} disabled={locked} />
@@ -70,7 +70,7 @@ export function TextProps({ el }) {
       <TextAreaField label="תוכן" value={el.text} onChange={setText} inputRef={textRef} />
       <SymbolBar textRef={textRef} value={el.text} onInsert={setText} />
       <FontPicker value={el.font} onChange={(font) => update({ font, weight: nearestWeight(font, el.weight ?? 400) }, 'font')} />
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-3">
         <SelectField
           label="משקל"
           value={String(el.weight ?? 400)}
@@ -92,7 +92,7 @@ export function ShapeProps({ el }) {
     <Section title="צורה">
       <ColorField label="מילוי" value={el.fill} allowNone onChange={(fill) => update({ fill }, 'fill')} />
       <ColorField label="קו מתאר" value={el.stroke} allowNone onChange={(stroke) => update({ stroke }, 'stroke')} />
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-3">
         <NumberField label="עובי קו מתאר" suffix="מ״מ" value={el.strokeWidthMm ?? 0} min={0} onCommit={(v) => update({ strokeWidthMm: roundMm(v) }, 'strokeWidthMm')} />
         {el.shape === 'rect' && (
           <NumberField label="עיגול פינות" suffix="מ״מ" value={el.cornerRadiusMm ?? 0} min={0} onCommit={(v) => update({ cornerRadiusMm: roundMm(v) }, 'cornerRadiusMm')} />

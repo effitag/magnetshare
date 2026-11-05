@@ -13,7 +13,7 @@ export default function PropertiesPanel() {
   const el = useSelected();
 
   return (
-    <aside className="w-72 shrink-0 border-e border-border bg-background overflow-y-auto">
+    <aside className="max-h-[42vh] w-full shrink-0 overflow-y-auto border-b border-border bg-background md:h-full md:max-h-none md:w-72 md:border-b-0 md:border-e">
       {!el && <TemplateInfo doc={doc} />}
       {el?.type === 'background' && <BackgroundProps el={el} />}
       {el && el.type !== 'background' && (
