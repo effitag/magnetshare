@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SHOW_TESTIMONIALS } from "@/config/home";
+import { SHOW_GALLERY, SHOW_TESTIMONIALS } from "@/config/home";
 
 const steps = [
   {
@@ -20,10 +20,9 @@ const steps = [
 ] as const;
 
 const benefits = [
-  { title: "מסגרת אחת לכולם", body: "אותו עיצוב, תמונה של כל אורח.", pin: "bg-pop" },
-  { title: "מגנט ביד", body: "לא נשאר רק קובץ בטלפון.", pin: "bg-primary" },
-  { title: "בלי חשבון לאורחים", body: "נכנסים מהקישור, ומצלמים.", pin: "bg-paper" },
-  { title: "עמדה באירוע", body: "ההדפסה קורית במקום.", pin: "bg-pop" },
+  { title: "מגנט ביד", body: "לא נשאר רק קובץ בטלפון.", pin: "bg-pop" },
+  { title: "בלי חשבון לאורחים", body: "נכנסים מהקישור, ומצלמים.", pin: "bg-primary" },
+  { title: "עמדה באירוע", body: "ההדפסה קורית במקום.", pin: "bg-paper" },
 ];
 
 const occasions = ["חתונות", "בר ובת מצווה", "ברית", "אירועי חברה", "ימי הולדת"];
@@ -58,6 +57,10 @@ const questions = [
     a: "משאירים שם וטלפון למטה, או כותבים בוואטסאפ.",
   },
 ];
+
+const visibleQuestions = questions.filter(
+  (item) => item.q !== "כמה מגנטים כל אורח מקבל?" && item.q !== "תוך כמה זמן המגנט מוכן?",
+);
 
 function Wave({ className }: { className: string }) {
   return (
@@ -96,15 +99,15 @@ function FaqList() {
   const [open, setOpen] = useState<number | null>(null);
 
   return (
-    <div className="mt-8 flex flex-col gap-4">
-      {questions.map((item, index) => {
+    <div className="mt-6 flex flex-col gap-5">
+      {visibleQuestions.map((item, index) => {
         const isOpen = open === index;
         return (
-          <div key={item.q} className={`sticker-card bg-sticker px-3 py-2 ${index % 2 === 0 ? "tilt-a" : "tilt-b"}`}>
+          <div key={item.q} className="sticker-card bg-sticker px-3 py-2">
             <h3>
               <button
                 type="button"
-                className="flex min-h-11 w-full items-center gap-3 text-start text-base font-medium text-ink"
+                className="flex min-h-12 w-full items-center gap-3 text-start text-lg font-medium text-ink"
                 aria-expanded={isOpen}
                 onClick={() => setOpen(isOpen ? null : index)}
               >
@@ -140,8 +143,9 @@ export function HomeSections() {
       <section id="steps" className="band-wash" aria-labelledby="steps-title">
         <div className="mx-auto max-w-xl px-4 pt-12 pb-4">
           <h2 id="steps-title" className="section-title">
-            שלושה רגעים
+            איך זה עובד
           </h2>
+          <p className="mt-3 text-base text-ink">קוד, צילום, מגנט.</p>
           <ol className="mt-8 flex flex-col gap-2">
             {steps.map((step, index) => (
               <li key={step.title}>
@@ -155,7 +159,7 @@ export function HomeSections() {
                     </span>
                   </div>
                   <div>
-                    <h3 className="text-xl font-medium text-ink">{step.title}</h3>
+                    <h3 className="text-lg font-medium text-ink">{step.title}</h3>
                     <p className="mt-1 text-base text-ink">{step.body}</p>
                   </div>
                 </div>
@@ -176,13 +180,14 @@ export function HomeSections() {
       <section id="benefits" className="band-white" aria-labelledby="benefits-title">
         <div className="mx-auto max-w-5xl px-4 pt-12 pb-4">
           <h2 id="benefits-title" className="section-title">
-            ארבעה דברים קטנים
+            למה מגנטים
           </h2>
+          <p className="mt-3 text-base text-ink">קטן, מודפס, ונשאר.</p>
           <ul className="mt-8 grid gap-5 sm:grid-cols-2">
             {benefits.map((item, index) => (
               <li key={item.title} className={`sticker-card relative bg-sticker p-4 ${index % 2 === 0 ? "tilt-a" : "tilt-b"}`}>
                 <span className={`absolute -top-2 end-6 size-4 rounded-full border-2 border-ink ${item.pin}`} />
-                <h3 className="text-xl font-medium text-ink">{item.title}</h3>
+                <h3 className="text-lg font-medium text-ink">{item.title}</h3>
                 <p className="mt-2 text-base text-ink">{item.body}</p>
               </li>
             ))}
@@ -194,13 +199,14 @@ export function HomeSections() {
       <section id="events" className="band px-4 py-12" aria-labelledby="events-title">
         <div className="mx-auto max-w-5xl">
           <h2 id="events-title" className="section-title">
-            איפה זה יושב יפה
+            לאילו אירועים
           </h2>
+          <p className="mt-3 text-base text-ink">מהחתונה ועד יום ההולדת.</p>
           <ul className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3">
             {occasions.map((occasion, index) => (
               <li
                 key={occasion}
-                className={`sticker-card flex min-h-16 items-center justify-center bg-sticker px-3 py-4 text-center text-base text-ink ${index % 2 === 0 ? "tilt-a" : "tilt-b"}`}
+                className={`sticker-card flex min-h-16 items-center justify-center bg-sticker px-3 py-4 text-center text-lg text-ink ${index % 2 === 0 ? "tilt-a" : "tilt-b"}`}
               >
                 {occasion}
               </li>
@@ -209,6 +215,7 @@ export function HomeSections() {
         </div>
       </section>
 
+      {SHOW_GALLERY ? (
       <section id="gallery" className="band-white" aria-labelledby="gallery-title">
         <div className="mx-auto max-w-5xl px-4 pt-12 pb-4">
           <h2 id="gallery-title" className="section-title">
@@ -227,12 +234,16 @@ export function HomeSections() {
         </div>
         <Wave className="text-[var(--color-pop-wash)]" />
       </section>
+      ) : (
+        <Wave className="text-[var(--color-pop-wash)]" />
+      )}
 
       <section id="faq" className="band-wash" aria-labelledby="faq-title">
         <div className="mx-auto max-w-3xl px-4 pt-12 pb-4">
           <h2 id="faq-title" className="section-title">
-            שאלות קצרות
+            שאלות נפוצות
           </h2>
+          <p className="mt-3 text-base text-ink">בקצרה, בלי אותיות קטנות.</p>
           <FaqList />
         </div>
         <Wave className="text-pop" />

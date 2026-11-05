@@ -9,6 +9,10 @@ const pages = {
     title: "תנאים",
     body: "טקסט זמני. תנאי השימוש יוחלפו בנוסח הסופי לפני פרסום.",
   },
+  accessibility: {
+    title: "הצהרת נגישות",
+    body: "טקסט זמני. הצהרת הנגישות תוחלף בנוסח הסופי.",
+  },
 } as const;
 
 export function LegalPage({ kind }: { kind: keyof typeof pages }) {

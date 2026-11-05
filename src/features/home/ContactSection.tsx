@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { whatsAppUrl } from "@/config/contact";
 import { AppError } from "@/lib/errors";
 import { insertLead } from "@/services/api";
+import { WhatsAppIcon } from "@/features/home/WhatsAppIcon";
 
 const eventTypes = ["חתונה", "בר מצווה", "בת מצווה", "ברית", "אירוע חברה", "יום הולדת"];
 const HOME_EVENT_NAME = "פנייה מדף הבית";
@@ -58,7 +59,16 @@ export function ContactSection() {
         <h2 id="contact-title" className="section-title">
           ספרו לנו על האירוע
         </h2>
-        <p className="mt-4 text-base text-ink">שם וטלפון מספיקים. נחזור אליכם.</p>
+        <p className="mt-3 text-base text-ink">שם וטלפון, ונחזור.</p>
+        <a
+          className="mt-6 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-full border-[3px] border-ink bg-pop px-4 font-display text-xl text-ink shadow-[4px_4px_0_#1c1416]"
+          href={whatsAppUrl()}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <WhatsAppIcon />
+          דברו איתנו בוואטסאפ
+        </a>
         {done ? (
           <p className="sticker-card mt-6 bg-sticker px-4 py-5 text-base text-ink" role="status">
             קיבלנו את הפרטים. נחזור אליכם.
@@ -101,8 +111,9 @@ export function ContactSection() {
               ) : null}
             </label>
             <label className="flex flex-col gap-2 text-base text-ink">
-              איזה אירוע
-              <span className="text-base text-ink">אפשר לדלג.</span>
+              <span>
+                איזה אירוע <span className="font-normal">(לא חובה)</span>
+              </span>
               <select
                 className="sticker-card sticker-flat min-h-11 w-full bg-sticker px-3 text-base text-ink"
                 name="eventType"
@@ -124,20 +135,12 @@ export function ContactSection() {
             ) : null}
             <button
               type="submit"
-              className="field-scroll sticker-card inline-flex min-h-14 w-full items-center justify-center bg-sticker px-4 font-display text-xl text-ink"
+              className="field-scroll inline-flex min-h-11 w-full items-center justify-center rounded-full border-2 border-ink bg-surface px-4 text-base text-ink"
               disabled={pending}
               onFocus={(event) => keepVisible(event.target)}
             >
               {pending ? "שולחים…" : "שלחו, ונחזור"}
             </button>
-            <a
-              className="sticker-card inline-flex min-h-11 w-full items-center justify-center bg-paper px-4 font-display text-base text-ink"
-              href={whatsAppUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              וואטסאפ
-            </a>
             <Link to="/privacy" className="inline-flex min-h-11 items-center text-base text-ink underline">
               הפרטים משמשים רק כדי לחזור אליכם
             </Link>

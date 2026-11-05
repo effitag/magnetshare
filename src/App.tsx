@@ -26,6 +26,7 @@ export function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/privacy" element={<LegalPage kind="privacy" />} />
           <Route path="/terms" element={<LegalPage kind="terms" />} />
+          <Route path="/accessibility" element={<LegalPage kind="accessibility" />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>

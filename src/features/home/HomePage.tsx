@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { whatsAppUrl } from "@/config/contact";
 import { ContactSection } from "@/features/home/ContactSection";
 import { HomeSections } from "@/features/home/HomeSections";
 import { SiteFooter } from "@/features/home/SiteFooter";
+import { WhatsAppIcon } from "@/features/home/WhatsAppIcon";
 
 const phrases = [
   "בלי הורדת אפליקציה",
@@ -30,8 +32,8 @@ export function HomePage() {
   }, []);
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-paper pt-[env(safe-area-inset-top,0px)]">
-      <header className="px-4 pt-4">
+    <div className="relative min-h-screen overflow-x-hidden bg-paper">
+      <header className="relative z-20 bg-paper px-4 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] pb-3">
         <p className="font-display text-lg text-primary">MagnetimShare</p>
       </header>
 
@@ -69,8 +71,9 @@ export function HomePage() {
       <SiteFooter />
 
       {contactVisible ? null : (
-        <a href="#contact" className="fab">
-          לפרטים ולהזמנה
+        <a className="fab" href={whatsAppUrl()} target="_blank" rel="noopener noreferrer">
+          <WhatsAppIcon />
+          דברו איתנו בוואטסאפ
         </a>
       )}
     </div>

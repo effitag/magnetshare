@@ -15,6 +15,9 @@ export function SiteFooter() {
         <Link to="/privacy" className="inline-flex min-h-11 items-center text-base text-ink underline">
           פרטיות
         </Link>
+        <Link to="/accessibility" className="inline-flex min-h-11 items-center text-base text-ink underline">
+          הצהרת נגישות
+        </Link>
       </div>
     </footer>
   );
