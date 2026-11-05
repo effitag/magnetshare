@@ -1,75 +1,64 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
-import * as api from "@/services/api";
-import type { Profile } from "@/services/types";
+import { supabase } from "@/lib/supabase";
 
 type AuthValue = {
   loading: boolean;
   session: Session | null;
   user: User | null;
-  profile: Profile | null;
-  signUp: typeof api.signUp;
-  signIn: typeof api.signIn;
-  signOut: () => Promise<void>;
+  isAdmin: boolean;
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
 
+async function readIsAdmin(): Promise<boolean> {
+  const { data, error } = await supabase.rpc("is_admin");
+  if (error) return false;
+  return data === true;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-
-  const loadProfile = useCallback(async (userId: string) => {
-    try {
-      setProfile(await api.fetchProfile(userId));
-    } catch {
-      setProfile(null);
-    }
-  }, []);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     let active = true;
 
-    api
-      .getSession()
-      .then((next) => {
-        if (!active) return;
-        setSession(next);
-        if (next?.user) return loadProfile(next.user.id);
-        return undefined;
-      })
-      .catch(() => {
-        if (active) setSession(null);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    const unsubscribe = api.onAuthChange((next) => {
-      if (!active) return;
+    function apply(next: Session | null) {
       setSession(next);
-      setLoading(false);
       if (!next?.user) {
-        setProfile(null);
+        setIsAdmin(false);
+        setLoading(false);
         return;
       }
-      const userId = next.user.id;
-      window.setTimeout(() => {
-        if (active) void loadProfile(userId);
-      }, 0);
+      void readIsAdmin().then((admin) => {
+        if (!active) return;
+        setIsAdmin(admin);
+        setLoading(false);
+      });
+    }
+
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (active) apply(data.session);
+      })
+      .catch(() => {
+        if (!active) return;
+        setSession(null);
+        setIsAdmin(false);
+        setLoading(false);
+      });
+
+    const { data } = supabase.auth.onAuthStateChange((_event, next) => {
+      if (active) apply(next);
     });
 
     return () => {
       active = false;
-      unsubscribe();
+      data.subscription.unsubscribe();
     };
-  }, [loadProfile]);
-
-  const signOut = useCallback(async () => {
-    await api.signOut();
-    setSession(null);
-    setProfile(null);
   }, []);
 
   const value = useMemo<AuthValue>(
@@ -77,12 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       session,
       user: session?.user ?? null,
-      profile,
-      signUp: api.signUp,
-      signIn: api.signIn,
-      signOut,
+      isAdmin,
     }),
-    [loading, session, profile, signOut],
+    [loading, session, isAdmin],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
