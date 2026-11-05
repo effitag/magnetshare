@@ -9,6 +9,6 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/features/studio/__tests__/*.test.js", "src/features/admin/events/*.test.ts"],
+    include: ["src/features/studio/__tests__/*.test.js", "src/features/admin/events/*.test.ts", "src/lib/cropToWindow.test.ts"],
   },
 });

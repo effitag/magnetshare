@@ -1,7 +1,7 @@
-import { toAppError } from "@/lib/errors";
+import { AppError, toAppError } from "@/lib/errors";
 import { supabase } from "@/lib/supabase";
 import { isFrameObjectPath } from "@/features/studio/storage/paths";
-import type { EventCard, Frame, NewLeadInput } from "@/services/types";
+import type { EventCard, Frame, NewLeadInput, PrintJob } from "@/services/types";
 
 export async function insertLead(input: NewLeadInput): Promise<void> {
   try {
@@ -412,4 +412,96 @@ export async function signedMediaUrl(
   const { data, error } = await supabase.storage.from("media").createSignedUrl(path, 60 * 30);
   if (error || !data?.signedUrl) return null;
   return data.signedUrl;
+}
+
+export type PublishedFrameWindow = {
+  id: string;
+  width_mm: number;
+  height_mm: number;
+  window_x: number;
+  window_y: number;
+  window_w: number;
+  window_h: number;
+};
+
+const PRINT_ERRORS: Record<string, string> = {
+  print_quota_exceeded: "נגמרו המגנטים שלכם לאירוע הזה.",
+  event_not_found: "האירוע לא נמצא.",
+  event_not_live: "האירוע לא פתוח לצילום.",
+  invalid_copies: "מספר העותקים לא תקין.",
+  invalid_storage_path: "לא הצלחנו לשמור את התמונה במקום הנכון.",
+  not_authenticated: "החיבור נותק. חזרו לדף האירוע ונסו שוב.",
+};
+
+function mapPrintError(error: unknown): AppError {
+  const message = error instanceof Error ? error.message : "";
+  for (const [code, hebrew] of Object.entries(PRINT_ERRORS)) {
+    if (message.includes(code)) return new AppError(hebrew);
+  }
+  return toAppError(error, "לא הצלחנו לשלוח את התמונה. נסו שוב.");
+}
+
+export async function getPublishedFrameWindow(id: string): Promise<PublishedFrameWindow | null> {
+  try {
+    const { data, error } = await supabase
+      .from("frames")
+      .select("id, width_mm, height_mm, window_x, window_y, window_w, window_h")
+      .eq("id", id)
+      .eq("is_published", true)
+      .maybeSingle();
+    if (error) throw error;
+    return (data as PublishedFrameWindow | null) ?? null;
+  } catch (error) {
+    throw toAppError(error, "לא הצלחנו לטעון את המסגרת. נסו שוב.");
+  }
+}
+
+export async function createGuestPrint(
+  eventId: string,
+  storagePath: string,
+  copies: number,
+): Promise<string> {
+  const { data, error } = await supabase.rpc("create_guest_print", {
+    p_event_id: eventId,
+    p_storage_path: storagePath,
+    p_copies: copies,
+  });
+  if (error) throw mapPrintError(error);
+  return data as string;
+}
+
+export async function listOwnPrintJobs(eventId: string): Promise<PrintJob[]> {
+  try {
+    const { data, error } = await supabase
+      .from("print_jobs")
+      .select("id, event_id, photo_id, guest_id, copies, status, created_at")
+      .eq("event_id", eventId)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data ?? []) as PrintJob[];
+  } catch (error) {
+    throw toAppError(error, "לא הצלחנו לטעון את המגנטים שלכם.");
+  }
+}
+
+export function subscribeOwnPrintJobs(
+  eventId: string,
+  guestId: string,
+  onJob: (job: PrintJob) => void,
+): () => void {
+  const channel = supabase
+    .channel(`guest-prints-${eventId}-${guestId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "print_jobs", filter: `event_id=eq.${eventId}` },
+      (payload) => {
+        const row = payload.new as PrintJob | undefined;
+        if (!row?.id || row.guest_id !== guestId) return;
+        onJob(row);
+      },
+    )
+    .subscribe();
+  return () => {
+    void supabase.removeChannel(channel);
+  };
 }
