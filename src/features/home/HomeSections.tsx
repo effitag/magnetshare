@@ -1,13 +1,29 @@
-const steps = [
-  { title: "סורקים את הקוד", body: "האורחים פותחים את הדף מהטלפון, בלי הורדת אפליקציה." },
-  { title: "מצלמים בתוך המסגרת", body: "התמונה נכנסת למסגרת שעיצבתם לאירוע." },
-  { title: "מקבלים מגנט מודפס", body: "כל אורח מקבל מגנט עם התמונה שלו." },
-];
+import { useState } from "react";
+import { SHOW_TESTIMONIALS } from "@/config/home";
 
-const offers = [
-  { title: "מגנטים מודפסים", body: "עם המסגרת של האירוע." },
-  { title: "עמדת הדפסה במקום", body: "ההדפסה קורית באירוע עצמו." },
-  { title: "מסגרת לאירוע", body: "מסגרת אחת, מעוצבת עבורכם." },
+const steps = [
+  {
+    title: "קוד קטן, דף פתוח",
+    body: "האורחים סורקים ומגיעים ישר לצילום.",
+    icon: "scan",
+  },
+  {
+    title: "תמונה בתוך המסגרת",
+    body: "העיצוב של האירוע כבר מחכה להם.",
+    icon: "camera",
+  },
+  {
+    title: "מגנט מודפס",
+    body: "כל אחד יוצא עם מגנט משלו.",
+    icon: "magnet",
+  },
+] as const;
+
+const benefits = [
+  { title: "מסגרת אחת לכולם", body: "אותו עיצוב, תמונה של כל אורח.", pin: "bg-pop" },
+  { title: "מגנט ביד", body: "לא נשאר רק קובץ בטלפון.", pin: "bg-primary" },
+  { title: "בלי חשבון לאורחים", body: "נכנסים מהקישור, ומצלמים.", pin: "bg-paper" },
+  { title: "עמדה באירוע", body: "ההדפסה קורית במקום.", pin: "bg-pop" },
 ];
 
 const occasions = ["חתונות", "בר ובת מצווה", "ברית", "אירועי חברה", "ימי הולדת"];
@@ -43,54 +59,148 @@ const questions = [
   },
 ];
 
+function Wave({ className }: { className: string }) {
+  return (
+    <svg className={`wave ${className}`} viewBox="0 0 1440 48" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 28c180-24 300 20 480 8s300-28 480-8 300 24 480 8v12H0z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function LineIcon({ name }: { name: "scan" | "camera" | "magnet" }) {
+  if (name === "scan") {
+    return (
+      <svg className="step-icon" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+        <path d="M14 8H8v6M34 8h6v6M14 40H8v-6M34 40h6v-6M16 24h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (name === "camera") {
+    return (
+      <svg className="step-icon" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+        <rect x="8" y="14" width="32" height="22" rx="4" stroke="currentColor" strokeWidth="2.5" />
+        <circle cx="24" cy="25" r="6" stroke="currentColor" strokeWidth="2.5" />
+        <path d="M18 14l2-4h8l2 4" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="step-icon" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect x="12" y="8" width="24" height="32" rx="6" stroke="currentColor" strokeWidth="2.5" />
+      <path d="M12 18h24" stroke="currentColor" strokeWidth="2.5" />
+    </svg>
+  );
+}
+
+function FaqList() {
+  const [open, setOpen] = useState<number | null>(null);
+
+  return (
+    <div className="mt-8 flex flex-col gap-4">
+      {questions.map((item, index) => {
+        const isOpen = open === index;
+        return (
+          <div key={item.q} className={`sticker-card bg-sticker px-3 py-2 ${index % 2 === 0 ? "tilt-a" : "tilt-b"}`}>
+            <h3>
+              <button
+                type="button"
+                className="flex min-h-11 w-full items-center gap-3 text-start text-base font-medium text-ink"
+                aria-expanded={isOpen}
+                onClick={() => setOpen(isOpen ? null : index)}
+              >
+                <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-full border-[3px] border-ink bg-pop font-display text-2xl leading-none text-ink">
+                  {isOpen ? "–" : "+"}
+                </span>
+                <span>{item.q}</span>
+              </button>
+            </h3>
+            {isOpen ? <p className="px-2 pb-3 text-base text-ink">{item.a}</p> : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Testimonials() {
+  if (!SHOW_TESTIMONIALS) return null;
+  return (
+    <section className="band px-4 py-12" aria-label="המלצות">
+      <div className="mx-auto max-w-3xl">
+        <h2 className="section-title">עוד רגע</h2>
+        <ul className="mt-8 grid gap-4" />
+      </div>
+    </section>
+  );
+}
+
 export function HomeSections() {
   return (
     <>
-      <section className="px-4 py-10" aria-labelledby="steps-title">
-        <div className="mx-auto max-w-5xl">
-          <h2 id="steps-title" className="font-display text-4xl leading-none text-ink">
-            איך זה עובד
+      <section id="steps" className="band-wash" aria-labelledby="steps-title">
+        <div className="mx-auto max-w-xl px-4 pt-12 pb-4">
+          <h2 id="steps-title" className="section-title">
+            שלושה רגעים
           </h2>
-          <ol className="mt-6 grid gap-4 md:grid-cols-3">
+          <ol className="mt-8 flex flex-col gap-2">
             {steps.map((step, index) => (
-              <li key={step.title} className="rounded-2xl border-[3px] border-ink bg-surface p-4">
-                <p className="inline-flex size-11 items-center justify-center rounded-full bg-pop font-display text-2xl text-ink">
-                  {index + 1}
-                </p>
-                <h3 className="mt-2 text-xl font-medium text-ink">{step.title}</h3>
-                <p className="mt-2 text-base text-ink">{step.body}</p>
+              <li key={step.title}>
+                <div className={`sticker-card flex items-center gap-3 bg-sticker p-3 ${index % 2 === 0 ? "tilt-a" : "tilt-b"}`}>
+                  <div className="relative shrink-0">
+                    <div className="grid size-[5.5rem] place-items-center rounded-2xl border-[3px] border-ink bg-sticker text-ink">
+                      <LineIcon name={step.icon} />
+                    </div>
+                    <span className="absolute -top-2 -start-2 inline-flex size-11 items-center justify-center rounded-full border-[3px] border-ink bg-pop font-display text-xl text-ink">
+                      {index + 1}
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-medium text-ink">{step.title}</h3>
+                    <p className="mt-1 text-base text-ink">{step.body}</p>
+                  </div>
+                </div>
+                {index < steps.length - 1 ? (
+                  <div className="flex justify-center py-2 text-ink" aria-hidden="true">
+                    <svg width="20" height="28" viewBox="0 0 20 28" fill="none">
+                      <path d="M10 2v18M4 14l6 8 6-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                ) : null}
               </li>
             ))}
           </ol>
         </div>
+        <Wave className="text-surface" />
       </section>
 
-      <section className="px-4 py-10" aria-labelledby="offer-title">
-        <div className="mx-auto max-w-5xl">
-          <h2 id="offer-title" className="font-display text-4xl leading-none text-ink">
-            מה מקבלים
+      <section id="benefits" className="band-white" aria-labelledby="benefits-title">
+        <div className="mx-auto max-w-5xl px-4 pt-12 pb-4">
+          <h2 id="benefits-title" className="section-title">
+            ארבעה דברים קטנים
           </h2>
-          <ul className="mt-6 grid gap-4 md:grid-cols-3">
-            {offers.map((offer) => (
-              <li key={offer.title} className="rounded-2xl border-[3px] border-ink bg-pop p-4">
-                <h3 className="text-xl font-medium text-ink">{offer.title}</h3>
-                <p className="mt-2 text-base text-ink">{offer.body}</p>
+          <ul className="mt-8 grid gap-5 sm:grid-cols-2">
+            {benefits.map((item, index) => (
+              <li key={item.title} className={`sticker-card relative bg-sticker p-4 ${index % 2 === 0 ? "tilt-a" : "tilt-b"}`}>
+                <span className={`absolute -top-2 end-6 size-4 rounded-full border-2 border-ink ${item.pin}`} />
+                <h3 className="text-xl font-medium text-ink">{item.title}</h3>
+                <p className="mt-2 text-base text-ink">{item.body}</p>
               </li>
             ))}
           </ul>
         </div>
+        <Wave className="text-paper" />
       </section>
 
-      <section className="px-4 py-10" aria-labelledby="events-title">
+      <section id="events" className="band px-4 py-12" aria-labelledby="events-title">
         <div className="mx-auto max-w-5xl">
-          <h2 id="events-title" className="font-display text-4xl leading-none text-ink">
-            לאילו אירועים
+          <h2 id="events-title" className="section-title">
+            איפה זה יושב יפה
           </h2>
-          <ul className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {occasions.map((occasion) => (
+          <ul className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {occasions.map((occasion, index) => (
               <li
                 key={occasion}
-                className="flex min-h-11 items-center justify-center rounded-2xl border-[3px] border-ink bg-surface px-3 py-4 text-center text-base text-ink"
+                className={`sticker-card flex min-h-16 items-center justify-center bg-sticker px-3 py-4 text-center text-base text-ink ${index % 2 === 0 ? "tilt-a" : "tilt-b"}`}
               >
                 {occasion}
               </li>
@@ -99,15 +209,15 @@ export function HomeSections() {
         </div>
       </section>
 
-      <section className="px-4 py-10" aria-labelledby="gallery-title">
-        <div className="mx-auto max-w-5xl">
-          <h2 id="gallery-title" className="font-display text-4xl leading-none text-ink">
-            מגנטים לדוגמה
+      <section id="gallery" className="band-white" aria-labelledby="gallery-title">
+        <div className="mx-auto max-w-5xl px-4 pt-12 pb-4">
+          <h2 id="gallery-title" className="section-title">
+            טעימה, עד שיהיו תמונות
           </h2>
-          <p className="mt-3 text-base text-ink">התמונות מסומנות להחלפה. הן לא צילומים אמיתיים.</p>
-          <ul className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
-            {gallery.map((item) => (
-              <li key={item.src} className="overflow-hidden">
+          <p className="mt-4 text-base text-ink">התמונות מסומנות להחלפה. הן לא צילומים אמיתיים.</p>
+          <ul className="mt-8 grid grid-cols-2 gap-5 sm:grid-cols-3">
+            {gallery.map((item, index) => (
+              <li key={item.src} className={index % 2 === 0 ? "tilt-a" : "tilt-b"}>
                 <figure className="gallery-card">
                   <img src={item.src} alt={item.alt} />
                 </figure>
@@ -115,23 +225,20 @@ export function HomeSections() {
             ))}
           </ul>
         </div>
+        <Wave className="text-[var(--color-pop-wash)]" />
       </section>
 
-      <section className="px-4 py-10" aria-labelledby="faq-title">
-        <div className="mx-auto max-w-3xl">
-          <h2 id="faq-title" className="font-display text-4xl leading-none text-ink">
-            שאלות
+      <section id="faq" className="band-wash" aria-labelledby="faq-title">
+        <div className="mx-auto max-w-3xl px-4 pt-12 pb-4">
+          <h2 id="faq-title" className="section-title">
+            שאלות קצרות
           </h2>
-          <dl className="mt-6 flex flex-col gap-4">
-            {questions.map((item) => (
-              <div key={item.q} className="rounded-2xl border-[3px] border-ink bg-surface p-4">
-                <dt className="text-xl font-medium text-ink">{item.q}</dt>
-                <dd className="mt-2 text-base text-ink">{item.a}</dd>
-              </div>
-            ))}
-          </dl>
+          <FaqList />
         </div>
+        <Wave className="text-pop" />
       </section>
+
+      <Testimonials />
     </>
   );
 }

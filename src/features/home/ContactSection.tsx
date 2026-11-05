@@ -4,6 +4,7 @@ import { whatsAppUrl } from "@/config/contact";
 import { AppError } from "@/lib/errors";
 import { insertLead } from "@/services/api";
 
+const eventTypes = ["חתונה", "בר מצווה", "בת מצווה", "ברית", "אירוע חברה", "יום הולדת"];
 const HOME_EVENT_NAME = "פנייה מדף הבית";
 
 function isIsraeliPhone(value: string): boolean {
@@ -15,6 +16,7 @@ function isIsraeliPhone(value: string): boolean {
 export function ContactSection() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [eventType, setEventType] = useState("");
   const [errors, setErrors] = useState<{ name?: string; phone?: string }>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -40,7 +42,7 @@ export function ContactSection() {
       await insertLead({
         organizer_name: name,
         phone,
-        event_name: HOME_EVENT_NAME,
+        event_name: eventType ? `${HOME_EVENT_NAME}: ${eventType}` : HOME_EVENT_NAME,
       });
       setDone(true);
     } catch (caught) {
@@ -51,14 +53,14 @@ export function ContactSection() {
   }
 
   return (
-    <section id="contact" className="scroll-mt-6 px-4 py-10" aria-labelledby="contact-title">
+    <section id="contact" className="scroll-mt-6 bg-pop px-4 pt-10 pb-[calc(2.5rem+env(safe-area-inset-bottom,0px))]" aria-labelledby="contact-title">
       <div className="mx-auto w-full max-w-lg">
-        <h2 id="contact-title" className="font-display text-4xl leading-none text-ink">
-          לפרטים ולהזמנה
+        <h2 id="contact-title" className="section-title">
+          ספרו לנו על האירוע
         </h2>
-        <p className="mt-3 text-base text-ink">השאירו שם וטלפון, או כתבו לנו בוואטסאפ.</p>
+        <p className="mt-4 text-base text-ink">שם וטלפון מספיקים. נחזור אליכם.</p>
         {done ? (
-          <p className="mt-6 rounded-2xl border-[3px] border-ink bg-pop px-4 py-5 text-base text-ink" role="status">
+          <p className="sticker-card mt-6 bg-sticker px-4 py-5 text-base text-ink" role="status">
             קיבלנו את הפרטים. נחזור אליכם.
           </p>
         ) : (
@@ -66,7 +68,7 @@ export function ContactSection() {
             <label className="flex flex-col gap-2 text-base text-ink">
               שם
               <input
-                className="field-scroll min-h-11 w-full rounded-xl border border-line bg-surface px-3 text-base text-ink"
+                className="field-scroll sticker-card sticker-flat min-h-11 w-full bg-sticker px-3 text-base text-ink"
                 name="name"
                 autoComplete="name"
                 value={name}
@@ -82,7 +84,7 @@ export function ContactSection() {
             <label className="flex flex-col gap-2 text-base text-ink">
               טלפון
               <input
-                className="field-scroll min-h-11 w-full rounded-xl border border-line bg-surface px-3 text-base text-ink"
+                className="field-scroll sticker-card sticker-flat min-h-11 w-full bg-sticker px-3 text-base text-ink"
                 name="phone"
                 type="tel"
                 inputMode="tel"
@@ -98,29 +100,44 @@ export function ContactSection() {
                 </span>
               ) : null}
             </label>
+            <label className="flex flex-col gap-2 text-base text-ink">
+              איזה אירוע
+              <span className="text-base text-ink">אפשר לדלג.</span>
+              <select
+                className="sticker-card sticker-flat min-h-11 w-full bg-sticker px-3 text-base text-ink"
+                name="eventType"
+                value={eventType}
+                onChange={(event) => setEventType(event.target.value)}
+              >
+                <option value="">עוד לא בחרנו</option>
+                {eventTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </label>
             {formError ? (
               <p className="text-base text-primary" role="alert">
                 {formError}
               </p>
             ) : null}
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="submit"
-                className="field-scroll inline-flex min-h-11 flex-1 basis-40 items-center justify-center rounded-full border-[3px] border-ink bg-pop px-4 font-display text-base text-ink"
-                disabled={pending}
-                onFocus={(event) => keepVisible(event.target)}
-              >
-                {pending ? "שולחים…" : "שליחת הפרטים"}
-              </button>
-              <a
-                className="inline-flex min-h-11 flex-1 basis-40 items-center justify-center rounded-full border-[3px] border-ink bg-surface px-4 font-display text-base text-ink"
-                href={whatsAppUrl()}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                וואטסאפ
-              </a>
-            </div>
+            <button
+              type="submit"
+              className="field-scroll sticker-card inline-flex min-h-14 w-full items-center justify-center bg-sticker px-4 font-display text-xl text-ink"
+              disabled={pending}
+              onFocus={(event) => keepVisible(event.target)}
+            >
+              {pending ? "שולחים…" : "שלחו, ונחזור"}
+            </button>
+            <a
+              className="sticker-card inline-flex min-h-11 w-full items-center justify-center bg-paper px-4 font-display text-base text-ink"
+              href={whatsAppUrl()}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              וואטסאפ
+            </a>
             <Link to="/privacy" className="inline-flex min-h-11 items-center text-base text-ink underline">
               הפרטים משמשים רק כדי לחזור אליכם
             </Link>

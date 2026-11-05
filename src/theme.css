@@ -26,6 +26,7 @@
   --marquee-duration: 18s;
   --marquee-tilt: -4.5deg;
   --sticker-stroke: 2px;
+  --color-pop-wash: #dceef5;
 }
 
 .sticker {
@@ -188,7 +189,7 @@
   border: 3px solid var(--color-ink);
   border-radius: 1.2rem;
   padding: 0.35rem;
-  box-shadow: var(--shadow-polaroid);
+  box-shadow: 4px 4px 0 var(--color-ink);
 }
 
 .gallery-card img {
@@ -197,6 +198,65 @@
   height: 100%;
   object-fit: cover;
   border-radius: 0.75rem;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(1.9rem, 8vw, 3.1rem);
+  line-height: 0.95;
+  color: var(--color-sticker);
+  -webkit-text-stroke: var(--sticker-stroke) var(--color-ink);
+  paint-order: stroke fill;
+  text-shadow:
+    -1px -1px 0 var(--color-ink),
+    1px -1px 0 var(--color-ink),
+    -1px 1px 0 var(--color-ink),
+    1px 1px 0 var(--color-ink),
+    3px 3px 0 var(--color-ink);
+}
+
+.sticker-card {
+  border: 3px solid var(--color-ink);
+  border-radius: 1.25rem;
+  background: var(--color-sticker);
+  box-shadow: 4px 4px 0 var(--color-ink);
+}
+
+.sticker-flat {
+  box-shadow: none;
+}
+
+.tilt-a {
+  transform: rotate(-1.5deg);
+}
+
+.tilt-b {
+  transform: rotate(1.5deg);
+}
+
+.band {
+  background: var(--color-paper);
+}
+
+.band-wash {
+  background: var(--color-pop-wash);
+}
+
+.band-white {
+  background: var(--color-surface);
+}
+
+.wave {
+  display: block;
+  width: 100%;
+  height: 2.25rem;
+  margin-bottom: -1px;
+}
+
+.step-icon {
+  width: 2.25rem;
+  height: 2.25rem;
 }
 
 .field-scroll {
