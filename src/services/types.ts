@@ -54,10 +54,11 @@ export type Event = {
   title: string;
   event_date: string | null;
   place: string | null;
-  frame_id: string;
+  frame_id: string | null;
   print_quota: number;
   status: EventStatus;
   lead_id: string | null;
+  cover_path: string | null;
   created_at: string;
 };
 
@@ -67,9 +68,11 @@ export type EventCard = {
   title: string;
   event_date: string | null;
   place: string | null;
-  frame_id: string;
+  frame_id: string | null;
   print_quota: number;
-  status: "live";
+  status: "live" | "closed";
+  cover_path: string | null;
+  screen_path: string | null;
 };
 
 export type GuestPhoto = {

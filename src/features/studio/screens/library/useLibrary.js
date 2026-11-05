@@ -97,12 +97,24 @@ export function useLibrary(repo, onOpen) {
     setBusy(null);
   }
 
-  async function duplicateForEvent(item) {
+  async function duplicateForEvent(item, eventId) {
     let created;
     const ok = await attempt(async () => {
       created = await repo.duplicateForEvent(item.id);
+      const { assignFrameToEvent } = await import('@/services/api');
+      await assignFrameToEvent(created.id, eventId);
     }, 'לא הצלחנו ליצור מסגרת לאירוע.');
     if (ok) onOpen(created.id);
+    return ok;
+  }
+
+  async function assignToEvent(item, eventId) {
+    const ok = await attempt(async () => {
+      const { assignFrameToEvent } = await import('@/services/api');
+      await assignFrameToEvent(item.id, eventId);
+    }, 'לא הצלחנו לשייך את המסגרת לאירוע.');
+    if (ok) notify('המסגרת שויכה לאירוע.', 'info');
+    return ok;
   }
 
   async function publish(item) {
@@ -127,5 +139,5 @@ export function useLibrary(repo, onOpen) {
     return ok;
   }
 
-  return { items, loadError, busy, refresh, create, rename, remove, importFrame, exportZip, importZip, duplicateForEvent, publish, unpublish };
+  return { items, loadError, busy, refresh, create, rename, remove, importFrame, exportZip, importZip, duplicateForEvent, assignToEvent, publish, unpublish };
 }

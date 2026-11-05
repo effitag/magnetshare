@@ -7,7 +7,7 @@ function sizeLabel({ widthMm, heightMm }) {
   return `${widthMm / 10}×${heightMm / 10}`;
 }
 
-export default function TemplateCard({ item, onOpen, onRename, onDelete, onDuplicate, onPublish, onUnpublish, isPublished }) {
+export default function TemplateCard({ item, onOpen, onRename, onDelete, onDuplicate, onAssign, onPublish, onUnpublish, isPublished }) {
   const { name, updatedAt, size, tags, thumbnailUrl } = item;
   const edited = updatedAt ? dateFormat.format(new Date(updatedAt)) : '';
   return (
@@ -42,6 +42,11 @@ export default function TemplateCard({ item, onOpen, onRename, onDelete, onDupli
         {onDuplicate && (
           <button type="button" className="min-h-11 px-2 text-base text-ink" onClick={onDuplicate}>
             מסגרת לאירוע
+          </button>
+        )}
+        {onAssign && (
+          <button type="button" className="min-h-11 px-2 text-base text-ink" onClick={onAssign}>
+            שיוך לאירוע
           </button>
         )}
         {onPublish && !isPublished && (
