@@ -76,7 +76,7 @@ export function LeadPage() {
   }
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-paper px-4 pb-10">
+    <div className="min-h-screen overflow-x-hidden bg-paper px-4 pb-[calc(2.5rem+env(safe-area-inset-bottom,0px))]">
       <header className="pt-4">
         <Link to="/" className="inline-flex min-h-11 items-center font-display text-lg text-primary">
           MagnetimShare
