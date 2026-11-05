@@ -12,7 +12,7 @@ var install_page_default = "<!DOCTYPE html>\n<html lang=\"en\" class=\"device-de
 //#endregion
 //#region \0virtual:grok-og-identity
 var grokOgIdentity = { "site": {
-	"title": "MemoriaShare",
+	"title": "MagnetimShare",
 	"card": "custom",
 	"color": "8E3A46",
 	"image": "/og.jpg"
