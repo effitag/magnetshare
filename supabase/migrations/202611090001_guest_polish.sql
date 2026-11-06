@@ -1,3 +1,4 @@
+-- Run this, then merge #8 immediately. Until then the camera is down.
 -- Guest polish: a landscape slot and an optional portrait slot, the frame used
 -- at capture, and live print-job updates.
 -- The realtime statement from 202611080001_print_jobs_realtime.sql is here.
@@ -29,6 +30,7 @@ create function public.frame_is_live_ready(p_id uuid)
 returns boolean
 language sql
 stable
+security definer
 set search_path = ''
 as $$
   select exists (
@@ -40,7 +42,8 @@ as $$
   );
 $$;
 
-revoke all on function public.frame_is_live_ready(uuid) from public, anon, authenticated;
+revoke all on function public.frame_is_live_ready(uuid) from public;
+grant execute on function public.frame_is_live_ready(uuid) to anon, authenticated;
 
 create or replace function public.events_require_published_frame()
 returns trigger
