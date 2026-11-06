@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { countMagnetsLeft } from "@/lib/magnets";
 import {
   ensureGuestSession,
   getEventCardBySlug,
@@ -9,31 +10,35 @@ import {
   subscribeOwnPrintJobs,
 } from "@/services/api";
 import type { PrintJob } from "@/services/types";
-import { MagnetCamera } from "./MagnetCamera";
-import type { CameraFrame } from "./MagnetFrame";
 import { GuestQuiet } from "../GuestQuiet";
+import { MagnetCamera, type CameraChoice } from "./MagnetCamera";
 
 type Ready = {
   eventId: string;
   quota: number;
   guestId: string;
-  frame: CameraFrame;
-  overlayUrl: string | null;
+  landscape: CameraChoice | null;
+  portrait: CameraChoice | null;
   jobs: PrintJob[];
 };
 
-function upsert(jobs: PrintJob[], job: PrintJob): PrintJob[] {
-  const next = jobs.some((row) => row.id === job.id)
-    ? jobs.map((row) => (row.id === job.id ? job : row))
-    : [job, ...jobs];
-  return next.sort((a, b) => b.created_at.localeCompare(a.created_at));
-}
-
-function magnetsLeft(quota: number, jobs: PrintJob[]): number {
-  const used = jobs
-    .filter((job) => job.status !== "rejected")
-    .reduce((sum, job) => sum + Number(job.copies ?? 0), 0);
-  return Math.max(0, quota - used);
+async function loadChoice(id: string | null, screen: string | null): Promise<CameraChoice | null> {
+  if (!id || !screen) return null;
+  const row = await getPublishedFrameWindow(id);
+  if (!row) return null;
+  const overlayUrl = await signedMediaUrl(screen);
+  return {
+    id,
+    overlayUrl,
+    frame: {
+      widthMm: row.width_mm,
+      heightMm: row.height_mm,
+      windowX: row.window_x,
+      windowY: row.window_y,
+      windowW: row.window_w,
+      windowH: row.window_h,
+    },
+  };
 }
 
 export function CameraPage() {
@@ -57,39 +62,23 @@ export function CameraPage() {
           setNote("closed");
           return;
         }
-        if (!card.frame_id) {
-          setNote("missing");
-          return;
-        }
         const guestId = await ensureGuestSession();
-        const frameRow = await getPublishedFrameWindow(card.frame_id);
-        if (!frameRow || !card.screen_path) {
-          setNote("missing");
-          return;
-        }
-        const [overlayUrl, jobs] = await Promise.all([
-          signedMediaUrl(card.screen_path),
+        const [landscape, portrait, jobs] = await Promise.all([
+          loadChoice(card.frame_id, card.screen_path),
+          loadChoice(card.frame_portrait_id, card.screen_path_portrait),
           listOwnPrintJobs(card.id),
         ]);
         if (cancelled) return;
-        const next: Ready = {
-          eventId: card.id,
-          quota: card.print_quota,
-          guestId,
-          overlayUrl,
-          jobs,
-          frame: {
-            widthMm: frameRow.width_mm,
-            heightMm: frameRow.height_mm,
-            windowX: frameRow.window_x,
-            windowY: frameRow.window_y,
-            windowW: frameRow.window_w,
-            windowH: frameRow.window_h,
-          },
-        };
+        if (!landscape && !portrait) {
+          setNote("missing");
+          return;
+        }
+        const next: Ready = { eventId: card.id, quota: card.print_quota, guestId, landscape, portrait, jobs };
         setReady(next);
-        const unsubscribe = subscribeOwnPrintJobs(card.id, guestId, (job) => {
-          setReady((current) => (current ? { ...current, jobs: upsert(current.jobs, job) } : current));
+        const unsubscribe = subscribeOwnPrintJobs(card.id, guestId, () => {
+          void listOwnPrintJobs(card.id).then((rows) => {
+            if (!cancelled) setReady((current) => (current ? { ...current, jobs: rows } : current));
+          });
         });
         if (cancelled) unsubscribe();
         else stop = unsubscribe;
@@ -111,15 +100,16 @@ export function CameraPage() {
     <MagnetCamera
       eventId={ready.eventId}
       guestId={ready.guestId}
-      frame={ready.frame}
-      overlayUrl={ready.overlayUrl}
-      remaining={magnetsLeft(ready.quota, ready.jobs)}
+      quota={ready.quota}
+      landscape={ready.landscape}
+      portrait={ready.portrait}
+      remaining={countMagnetsLeft(ready.quota, ready.jobs)}
       jobs={ready.jobs}
       onClose={() => navigate(`/e/${slug}`)}
-      onSent={() => {
-        void listOwnPrintJobs(ready.eventId).then((jobs) => {
-          setReady((current) => (current ? { ...current, jobs } : current));
-        });
+      onPrinted={async () => {
+        const jobs = await listOwnPrintJobs(ready.eventId);
+        setReady((current) => (current ? { ...current, jobs } : current));
+        return jobs;
       }}
     />
   );

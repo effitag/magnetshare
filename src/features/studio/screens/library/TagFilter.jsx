@@ -1,6 +1,8 @@
+import { visibleTags } from '@/features/studio/model/presets';
+
 // Filter the library by kind of event (the tag a ready-made frame gives its template).
 export default function TagFilter({ items, value, onChange }) {
-  const tags = [...new Set(items.flatMap((i) => i.tags))];
+  const tags = [...new Set(items.flatMap((i) => visibleTags(i.tags)))];
   if (!tags.length) return null;
   const chip = (label, tag) => (
     <button

@@ -39,10 +39,10 @@ export function FrameViewfinder({ frame, overlayUrl, inset, videoRef, isFront, f
       style={{ top: inset.top, right: inset.right, bottom: inset.bottom, left: inset.left }}
     >
       {boxWidth > 0 ? (
-        <MagnetFrame frame={frame} overlayUrl={overlayUrl} width={boxWidth}>
+        <MagnetFrame frame={frame} overlayUrl={overlayUrl} width={boxWidth} animate>
           {loading ? (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-ink">
-              <Loader2 className="h-7 w-7 animate-spin text-paper/40" />
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-paper">
+              <Loader2 className="h-7 w-7 animate-spin text-ink" />
             </div>
           ) : null}
           <video

@@ -83,3 +83,26 @@ export function canvasToJpeg(canvas: HTMLCanvasElement, quality = JPEG_QUALITY):
     );
   });
 }
+
+/** Longest side 480. The landing signs this file and never the print photo. */
+export function canvasToThumb(source: CanvasImageSource, width: number, height: number, edge = 480): Promise<Blob> {
+  const scale = Math.min(1, edge / Math.max(width, height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(width * scale));
+  canvas.height = Math.max(1, Math.round(height * scale));
+  const context = canvas.getContext("2d");
+  if (!context) return Promise.reject(new Error("canvas"));
+  context.drawImage(source, 0, 0, canvas.width, canvas.height);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("webp"))), "image/webp", 0.8);
+  });
+}
+
+export async function blobToThumb(blob: Blob, edge = 480): Promise<Blob> {
+  const bitmap = await createImageBitmap(blob);
+  try {
+    return await canvasToThumb(bitmap, bitmap.width, bitmap.height, edge);
+  } finally {
+    bitmap.close();
+  }
+}

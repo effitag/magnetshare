@@ -1,7 +1,8 @@
 import { AppError, toAppError } from "@/lib/errors";
+import { countMagnetsLeft, slotForSize, type FrameSlot } from "@/lib/magnets";
 import { supabase } from "@/lib/supabase";
 import { isFrameObjectPath } from "@/features/studio/storage/paths";
-import type { EventCard, Frame, NewLeadInput, PrintJob } from "@/services/types";
+import type { EventCard, Frame, NewLeadInput, PrintJob, PrintJobStatus } from "@/services/types";
 
 export async function insertLead(input: NewLeadInput): Promise<void> {
   try {
@@ -21,15 +22,27 @@ export async function insertLead(input: NewLeadInput): Promise<void> {
   }
 }
 
+const EVENT_CARD_COLUMNS =
+  "id, slug, title, event_date, place, frame_id, frame_portrait_id, print_quota, status, cover_path, screen_path, screen_path_portrait";
+const EVENT_CARD_LEGACY =
+  "id, slug, title, event_date, place, frame_id, print_quota, status, cover_path, screen_path";
+
+function missingColumn(error: { message?: string } | null, name: string): boolean {
+  const message = error?.message ?? "";
+  return message.includes(name);
+}
+
 export async function getEventCardBySlug(slug: string): Promise<EventCard | null> {
   try {
-    const { data, error } = await supabase
-      .from("event_cards")
-      .select("id, slug, title, event_date, place, frame_id, print_quota, status, cover_path, screen_path")
-      .eq("slug", slug)
-      .maybeSingle();
-    if (error) throw error;
-    return (data as EventCard | null) ?? null;
+    const first = await supabase.from("event_cards").select(EVENT_CARD_COLUMNS).eq("slug", slug).maybeSingle();
+    if (first.error && (missingColumn(first.error, "frame_portrait_id") || missingColumn(first.error, "screen_path_portrait"))) {
+      const second = await supabase.from("event_cards").select(EVENT_CARD_LEGACY).eq("slug", slug).maybeSingle();
+      if (second.error) throw second.error;
+      if (!second.data) return null;
+      return { ...(second.data as EventCard), frame_portrait_id: null, screen_path_portrait: null };
+    }
+    if (first.error) throw first.error;
+    return (first.data as EventCard | null) ?? null;
   } catch (error) {
     throw toAppError(error, "לא הצלחנו לפתוח את האירוע. בדקו את הקישור ונסו שוב.");
   }
@@ -49,11 +62,6 @@ export async function listPublishedFrames(): Promise<Frame[]> {
   } catch (error) {
     throw toAppError(error, "לא הצלחנו לטעון את המסגרות. רעננו את העמוד ונסו שוב.");
   }
-}
-
-function frameJoin(value: unknown): { name?: string; is_published?: boolean } {
-  const row = Array.isArray(value) ? value[0] : value;
-  return (row ?? {}) as { name?: string; is_published?: boolean };
 }
 
 function frameRow(row: Record<string, unknown>) {
@@ -180,13 +188,23 @@ export const frameGateway = {
   },
 };
 
-export async function uploadGuestPhoto(eventId: string, guestId: string, file: File): Promise<string> {
-  const safeName = file.name.replace(/[^\w.-]+/g, "_");
-  const path = `${eventId}/${guestId}/${Date.now()}_${safeName}`;
+export async function uploadGuestPhoto(eventId: string, guestId: string, file: File, thumb: Blob): Promise<string> {
+  const stamp = Date.now();
+  const safeName = file.name.replace(/[^\w.-]+/g, "_") || "photo.jpg";
+  const path = `${eventId}/${guestId}/${stamp}_${safeName}`;
+  const thumbKey = `${eventId}/${guestId}/${stamp}_thumb.webp`;
   if (path.split("/")[0] === "frames" || path.split("/")[0] === "events") {
     throw toAppError(new Error("reserved"), "אי אפשר לשמור קובץ של אורח בתיקייה הזו.");
   }
-  const { error } = await supabase.storage.from("media").upload(path, file, { upsert: false });
+  const thumbUpload = await supabase.storage.from("media").upload(thumbKey, thumb, {
+    contentType: "image/webp",
+    upsert: false,
+  });
+  if (thumbUpload.error) throw toAppError(thumbUpload.error, "לא הצלחנו לשמור את התמונה. נסו שוב.");
+  const { error } = await supabase.storage.from("media").upload(path, file, {
+    contentType: file.type || "image/jpeg",
+    upsert: false,
+  });
   if (error) throw toAppError(error, "לא הצלחנו לשמור את התמונה. נסו שוב.");
   return path;
 }
@@ -198,6 +216,9 @@ export type AdminEventRow = {
   frame_id: string | null;
   frame_name: string;
   frame_published: boolean;
+  frame_portrait_id: string | null;
+  portrait_name: string;
+  portrait_published: boolean;
 };
 
 export type AdminEventDetail = {
@@ -216,25 +237,47 @@ export type EventDraft = {
 };
 
 export async function listAdminEvents(): Promise<AdminEventRow[]> {
-  const { data, error } = await supabase
-    .from("events")
-    .select("id, title, status, frame_id, frame:frames(name, is_published)")
-    .order("created_at", { ascending: false });
+  const columns = "id, title, status, frame_id, frame_portrait_id";
+  const first = await supabase.from("events").select(columns).order("created_at", { ascending: false });
+  const legacy = first.error && missingColumn(first.error, "frame_portrait_id");
+  const { data, error } = legacy
+    ? await supabase.from("events").select("id, title, status, frame_id").order("created_at", { ascending: false })
+    : first;
   if (error) throw toAppError(error, "לא הצלחנו לטעון את האירועים.");
-  return (data ?? []).map((row) => {
-    const frame = frameJoin(row.frame);
+  const rows = (data ?? []) as {
+    id: string;
+    title: string;
+    status: string;
+    frame_id: string | null;
+    frame_portrait_id?: string | null;
+  }[];
+  const ids = [...new Set(rows.flatMap((row) => [row.frame_id, row.frame_portrait_id].filter((id): id is string => Boolean(id))))];
+  const frames = new Map<string, { name: string; is_published: boolean }>();
+  if (ids.length) {
+    const listed = await supabase.from("frames").select("id, name, is_published").in("id", ids);
+    if (listed.error) throw toAppError(listed.error, "לא הצלחנו לטעון את האירועים.");
+    for (const frame of listed.data ?? []) {
+      frames.set(frame.id as string, { name: (frame.name as string) ?? "", is_published: frame.is_published === true });
+    }
+  }
+  return rows.map((row) => {
+    const landscape = row.frame_id ? frames.get(row.frame_id) : undefined;
+    const portrait = row.frame_portrait_id ? frames.get(row.frame_portrait_id) : undefined;
     return {
-      id: row.id as string,
-      title: row.title as string,
-      status: row.status as string,
-      frame_id: (row.frame_id as string | null) ?? null,
-      frame_name: frame.name ?? "",
-      frame_published: frame.is_published === true,
+      id: row.id,
+      title: row.title,
+      status: row.status,
+      frame_id: row.frame_id ?? null,
+      frame_name: landscape?.name ?? "",
+      frame_published: landscape?.is_published === true,
+      frame_portrait_id: row.frame_portrait_id ?? null,
+      portrait_name: portrait?.name ?? "",
+      portrait_published: portrait?.is_published === true,
     };
   });
 }
 
-const LIVE_BLOCK = "כדי להפעיל את האירוע צריך מסגרת מפורסמת. במסגרות יוצרים מסגרת לאירוע, משייכים אותה, ומפרסמים.";
+const LIVE_BLOCK = "כדי להפעיל את האירוע צריך לפחות מסגרת מפורסמת אחת. מסגרת שכבר שויכה חייבת להיות מפורסמת. במסגרות יוצרים מסגרת לאירוע, משייכים אותה, ומפרסמים.";
 
 export async function setEventLiveSwitch(eventId: string, live: boolean): Promise<void> {
   if (!live) {
@@ -242,14 +285,26 @@ export async function setEventLiveSwitch(eventId: string, live: boolean): Promis
     if (closed.error) throw toAppError(closed.error, "לא הצלחנו לסגור את האירוע.");
     return;
   }
-  const { data, error } = await supabase
-    .from("events")
-    .select("frame_id, frame:frames(name, is_published)")
-    .eq("id", eventId)
-    .single();
-  if (error) throw toAppError(error, "לא הצלחנו לבדוק את האירוע.");
-  const frame = frameJoin(data.frame);
-  if (!data.frame_id || frame.is_published !== true) throw new Error(LIVE_BLOCK);
+  const first = await supabase.from("events").select("frame_id, frame_portrait_id").eq("id", eventId).single();
+  const legacy = first.error && missingColumn(first.error, "frame_portrait_id");
+  const loaded = legacy
+    ? await supabase.from("events").select("frame_id").eq("id", eventId).single()
+    : first;
+  if (loaded.error) throw toAppError(loaded.error, "לא הצלחנו לבדוק את האירוע.");
+  const frameId = (loaded.data.frame_id as string | null) ?? null;
+  const portraitId = legacy ? null : ((loaded.data as { frame_portrait_id?: string | null }).frame_portrait_id ?? null);
+  const ids = [frameId, portraitId].filter((id): id is string => Boolean(id));
+  const published = new Map<string, boolean>();
+  if (ids.length) {
+    const frames = await supabase.from("frames").select("id, is_published").in("id", ids);
+    if (frames.error) throw toAppError(frames.error, "לא הצלחנו לבדוק את האירוע.");
+    for (const frame of frames.data ?? []) published.set(frame.id as string, frame.is_published === true);
+  }
+  const landReady = Boolean(frameId) && published.get(frameId as string) === true;
+  const portReady = Boolean(portraitId) && published.get(portraitId as string) === true;
+  if ((frameId && !landReady) || (portraitId && !portReady) || (!landReady && !portReady)) {
+    throw new Error(LIVE_BLOCK);
+  }
   const update = await supabase.from("events").update({ status: "live" }).eq("id", eventId);
   if (update.error) {
     if (update.error.message?.includes("event_frame_not_published")) throw new Error(LIVE_BLOCK);
@@ -351,30 +406,72 @@ export async function saveEventCover(eventId: string, file: File): Promise<strin
   return path;
 }
 
-export async function assignFrameToEvent(frameId: string, eventId: string): Promise<void> {
-  const frame = await supabase.from("frames").select("is_template, is_published").eq("id", frameId).maybeSingle();
+function slotMismatch(widthMm: number, heightMm: number): string {
+  if (Number(widthMm) === Number(heightMm)) return "מסגרת ריבוע נשמרת כמסגרת לאורך.";
+  return Number(widthMm) > Number(heightMm)
+    ? "המסגרת רחבה יותר מגובהה, אז היא לרוחב."
+    : "המסגרת גבוהה יותר מרוחבה, אז היא לאורך.";
+}
+
+export async function assignFrameToEvent(frameId: string, eventId: string, slot: FrameSlot): Promise<void> {
+  const frame = await supabase
+    .from("frames")
+    .select("is_template, is_published, width_mm, height_mm")
+    .eq("id", frameId)
+    .maybeSingle();
   if (frame.error) throw toAppError(frame.error, "לא הצלחנו לבדוק את המסגרת.");
   if (!frame.data || frame.data.is_template === true) {
     throw new Error("אי אפשר לשייך תבנית. צרו ממנה מסגרת לאירוע.");
   }
-  const target = await supabase.from("events").select("status").eq("id", eventId).maybeSingle();
-  if (target.error || !target.data) throw toAppError(target.error, "האירוע לא נמצא.");
-  if (target.data.status === "live" && frame.data.is_published !== true) {
+  const width = Number(frame.data.width_mm);
+  const height = Number(frame.data.height_mm);
+  if (slotForSize(width, height) !== slot) throw new Error(slotMismatch(width, height));
+  const target = await supabase.from("events").select("status, frame_id, frame_portrait_id").eq("id", eventId).maybeSingle();
+  const legacyTarget = target.error && missingColumn(target.error, "frame_portrait_id");
+  const eventRow = legacyTarget
+    ? await supabase.from("events").select("status, frame_id").eq("id", eventId).maybeSingle()
+    : target;
+  if (eventRow.error || !eventRow.data) throw toAppError(eventRow.error, "האירוע לא נמצא.");
+  if (legacyTarget && slot === "portrait") {
+    throw new Error("כדי לשייך מסגרת לאורך צריך קודם להריץ את עדכון המסד.");
+  }
+  if (eventRow.data.status === "live" && frame.data.is_published !== true) {
     throw new Error("אי אפשר לשייך מסגרת שלא פורסמה לאירוע חי.");
   }
-  const others = await supabase.from("events").select("id, status, title").eq("frame_id", frameId).neq("id", eventId);
-  if (others.error) throw toAppError(others.error, "לא הצלחנו לבדוק את השיוך.");
-  const blocking = (others.data ?? []).find((row) => row.status === "live");
+  const othersQuery = legacyTarget
+    ? await supabase.from("events").select("id, status, title, frame_id").eq("frame_id", frameId)
+    : await supabase.from("events").select("id, status, title, frame_id, frame_portrait_id").or(`frame_id.eq.${frameId},frame_portrait_id.eq.${frameId}`);
+  if (othersQuery.error) throw toAppError(othersQuery.error, "לא הצלחנו לבדוק את השיוך.");
+  const others = (othersQuery.data ?? []) as {
+    id: string;
+    status: string;
+    title: string;
+    frame_id: string | null;
+    frame_portrait_id?: string | null;
+  }[];
+  const blocking = others.find((row) => row.id !== eventId && row.status === "live");
   if (blocking) throw new Error(`המסגרת כבר משויכת לאירוע חי «${blocking.title}».`);
-  const otherIds = (others.data ?? []).map((row) => row.id as string);
-  if (otherIds.length) {
-    const cleared = await supabase.from("events").update({ frame_id: null }).in("id", otherIds);
+  for (const row of others) {
+    if (row.id === eventId) continue;
+    const patch: { frame_id?: null; frame_portrait_id?: null } = {};
+    if (row.frame_id === frameId) patch.frame_id = null;
+    if (row.frame_portrait_id === frameId) patch.frame_portrait_id = null;
+    if (!Object.keys(patch).length) continue;
+    const cleared = await supabase.from("events").update(patch).eq("id", row.id);
     if (cleared.error) throw toAppError(cleared.error, "לא הצלחנו לשחרר את המסגרת מהאירוע הקודם.");
   }
-  const update = await supabase.from("events").update({ frame_id: frameId }).eq("id", eventId);
+  const current = eventRow.data as { frame_id: string | null; frame_portrait_id?: string | null };
+  const patch: { frame_id?: string | null; frame_portrait_id?: string | null } =
+    slot === "landscape"
+      ? { frame_id: frameId, ...(current.frame_portrait_id === frameId ? { frame_portrait_id: null } : {}) }
+      : { frame_portrait_id: frameId, ...(current.frame_id === frameId ? { frame_id: null } : {}) };
+  const update = await supabase.from("events").update(patch).eq("id", eventId);
   if (update.error) {
     if (update.error.message?.includes("event_frame_is_template")) {
       throw new Error("אי אפשר לשייך תבנית. צרו ממנה מסגרת לאירוע.");
+    }
+    if (missingColumn(update.error, "frame_portrait_id")) {
+      throw new Error("כדי לשייך מסגרת לאורך צריך קודם להריץ את עדכון המסד.");
     }
     throw toAppError(update.error, "לא הצלחנו לשייך את המסגרת לאירוע.");
   }
@@ -389,14 +486,8 @@ export async function ensureGuestSession(): Promise<string> {
 }
 
 export async function guestMagnetsLeft(eventId: string, quota: number): Promise<number> {
-  const session = await supabase.auth.getSession();
-  const uid = session.data.session?.user.id;
-  const { data, error } = await supabase.from("print_jobs").select("guest_id, copies, status").eq("event_id", eventId);
-  if (error) throw toAppError(error, "לא הצלחנו לבדוק כמה מגנטים נשארו.");
-  const used = (data ?? [])
-    .filter((row) => row.guest_id === uid && row.status !== "rejected")
-    .reduce((sum, row) => sum + Number(row.copies ?? 0), 0);
-  return Math.max(0, quota - used);
+  const jobs = await listOwnPrintJobs(eventId);
+  return countMagnetsLeft(quota, jobs);
 }
 
 export async function signedMediaUrl(
@@ -431,6 +522,7 @@ const PRINT_ERRORS: Record<string, string> = {
   invalid_copies: "מספר העותקים לא תקין.",
   invalid_storage_path: "לא הצלחנו לשמור את התמונה במקום הנכון.",
   not_authenticated: "החיבור נותק. חזרו לדף האירוע ונסו שוב.",
+  frame_not_in_event: "המסגרת לא שייכת לאירוע הזה.",
 };
 
 function mapPrintError(error: unknown): AppError {
@@ -460,44 +552,74 @@ export async function createGuestPrint(
   eventId: string,
   storagePath: string,
   copies: number,
+  frameId: string,
 ): Promise<string> {
-  const { data, error } = await supabase.rpc("create_guest_print", {
+  const args = {
     p_event_id: eventId,
     p_storage_path: storagePath,
     p_copies: copies,
-  });
+    p_frame_id: frameId,
+  };
+  const first = await supabase.rpc("create_guest_print", args);
+  const legacy =
+    first.error &&
+    /create_guest_print/.test(first.error.message) &&
+    /schema cache|Could not find the function|PGRST202/.test(first.error.message);
+  const { data, error } = legacy
+    ? await supabase.rpc("create_guest_print", {
+        p_event_id: eventId,
+        p_storage_path: storagePath,
+        p_copies: copies,
+      })
+    : first;
   if (error) throw mapPrintError(error);
   return data as string;
 }
 
+const JOB_COLUMNS =
+  "id, event_id, photo_id, guest_id, copies, status, created_at, frame_id, photo:guest_photos(storage_path)";
+const JOB_LEGACY = "id, event_id, photo_id, guest_id, copies, status, created_at, photo:guest_photos(storage_path)";
+
+function asJob(row: Record<string, unknown>): PrintJob {
+  const photo = row.photo as { storage_path?: string } | { storage_path?: string }[] | null;
+  const nested = Array.isArray(photo) ? photo[0] : photo;
+  return {
+    id: String(row.id),
+    event_id: String(row.event_id),
+    photo_id: String(row.photo_id),
+    guest_id: String(row.guest_id),
+    copies: Number(row.copies ?? 0),
+    status: row.status as PrintJobStatus,
+    created_at: String(row.created_at),
+    frame_id: (row.frame_id as string | null) ?? null,
+    storage_path: nested?.storage_path ?? null,
+  };
+}
+
 export async function listOwnPrintJobs(eventId: string): Promise<PrintJob[]> {
   try {
-    const { data, error } = await supabase
-      .from("print_jobs")
-      .select("id, event_id, photo_id, guest_id, copies, status, created_at")
-      .eq("event_id", eventId)
-      .order("created_at", { ascending: false });
+    const first = await supabase.from("print_jobs").select(JOB_COLUMNS).eq("event_id", eventId).order("created_at", { ascending: false });
+    const legacy = first.error && missingColumn(first.error, "frame_id");
+    const { data, error } = legacy
+      ? await supabase.from("print_jobs").select(JOB_LEGACY).eq("event_id", eventId).order("created_at", { ascending: false })
+      : first;
     if (error) throw error;
-    return (data ?? []) as PrintJob[];
+    return (data ?? []).map((row) => asJob(row as Record<string, unknown>));
   } catch (error) {
     throw toAppError(error, "לא הצלחנו לטעון את המגנטים שלכם.");
   }
 }
 
-export function subscribeOwnPrintJobs(
-  eventId: string,
-  guestId: string,
-  onJob: (job: PrintJob) => void,
-): () => void {
+export function subscribeOwnPrintJobs(eventId: string, guestId: string, onChange: () => void): () => void {
   const channel = supabase
     .channel(`guest-prints-${eventId}-${guestId}`)
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "print_jobs", filter: `event_id=eq.${eventId}` },
       (payload) => {
-        const row = payload.new as PrintJob | undefined;
-        if (!row?.id || row.guest_id !== guestId) return;
-        onJob(row);
+        const row = (payload.new ?? payload.old) as { guest_id?: string } | undefined;
+        if (row?.guest_id && row.guest_id !== guestId) return;
+        onChange();
       },
     )
     .subscribe();

@@ -10,6 +10,8 @@ function toItem(row: AdminEventRow): EventListItem {
     status: row.status,
     frameId: row.frame_id,
     framePublished: row.frame_published,
+    portraitId: row.frame_portrait_id,
+    portraitPublished: row.portrait_published,
   };
 }
 

@@ -4,11 +4,33 @@ import { canvasToJpeg, cropCanvasToWindow, type WindowFrame } from "@/lib/cropTo
 import type { PrintJob } from "@/services/types";
 import { inAppBrowser } from "../browser";
 import { FrameViewfinder } from "./FrameViewfinder";
+import type { CameraFrame } from "./MagnetFrame";
 import { MagnetReview } from "./MagnetReview";
 import { PrintStatus } from "./PrintStatus";
-import type { CameraFrame } from "./MagnetFrame";
 
+export const VINTAGE_FILTER_ENABLED = false;
 const VINTAGE_FILTER = "sepia(0.35) contrast(0.88) brightness(1.08) saturate(1.15)";
+
+export type CameraChoice = {
+  id: string;
+  overlayUrl: string | null;
+  frame: CameraFrame;
+};
+
+type Orient = "landscape" | "portrait";
+
+function orientKey(eventId: string) {
+  return `magnetimshare:frame-orient:${eventId}`;
+}
+
+function readOrient(eventId: string): Orient | null {
+  try {
+    const value = localStorage.getItem(orientKey(eventId));
+    return value === "landscape" || value === "portrait" ? value : null;
+  } catch {
+    return null;
+  }
+}
 
 function trackTorch(track: MediaStreamTrack | null): boolean {
   const capabilities = (track?.getCapabilities?.() ?? {}) as { torch?: boolean };
@@ -32,15 +54,26 @@ function applyVintagePixels(ctx: CanvasRenderingContext2D, w: number, h: number)
 type Props = {
   eventId: string;
   guestId: string;
-  frame: CameraFrame;
-  overlayUrl: string | null;
+  quota: number;
+  landscape: CameraChoice | null;
+  portrait: CameraChoice | null;
   remaining: number;
   jobs: PrintJob[];
   onClose: () => void;
-  onSent: () => void;
+  onPrinted: () => Promise<PrintJob[]>;
 };
 
-export function MagnetCamera({ eventId, guestId, frame, overlayUrl, remaining, jobs, onClose, onSent }: Props) {
+export function MagnetCamera({
+  eventId,
+  guestId,
+  quota,
+  landscape,
+  portrait,
+  remaining,
+  jobs,
+  onClose,
+  onPrinted,
+}: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -49,7 +82,6 @@ export function MagnetCamera({ eventId, guestId, frame, overlayUrl, remaining, j
   const capturingRef = useRef(false);
   const startIdRef = useRef(0);
   const timeoutsRef = useRef<number[]>([]);
-  const capturedCountRef = useRef(0);
   const photoUrlRef = useRef<string | null>(null);
 
   const [isFront, setIsFront] = useState(false);
@@ -65,7 +97,18 @@ export function MagnetCamera({ eventId, guestId, frame, overlayUrl, remaining, j
   const [mode, setMode] = useState<"camera" | "review" | "sent">("camera");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
-  const [landscape, setLandscape] = useState(() => window.matchMedia("(orientation: landscape)").matches);
+  const [wide, setWide] = useState(() => window.matchMedia("(orientation: landscape)").matches);
+  const [orient, setOrient] = useState<Orient>(() => {
+    const saved = readOrient(eventId);
+    if (saved === "portrait" && portrait) return "portrait";
+    if (saved === "landscape" && landscape) return "landscape";
+    return landscape ? "landscape" : "portrait";
+  });
+  const [sentJobs, setSentJobs] = useState<PrintJob[] | null>(null);
+
+  const both = Boolean(landscape && portrait);
+  const active = (orient === "portrait" ? portrait : landscape) ?? landscape ?? portrait;
+  const filterOn = VINTAGE_FILTER_ENABLED && vintage;
 
   function later(fn: () => void, ms: number) {
     const id = window.setTimeout(fn, ms);
@@ -80,18 +123,28 @@ export function MagnetCamera({ eventId, guestId, frame, overlayUrl, remaining, j
     setPhotoBlob(blob);
   }
 
-  useEffect(() => () => {
-    timeoutsRef.current.forEach(clearTimeout);
-    if (photoUrlRef.current) URL.revokeObjectURL(photoUrlRef.current);
-  }, []);
+  function choose(next: Orient) {
+    if (next === "landscape" && !landscape) return;
+    if (next === "portrait" && !portrait) return;
+    setOrient(next);
+    try {
+      localStorage.setItem(orientKey(eventId), next);
+    } catch {
+      /* private mode still switches for this visit */
+    }
+  }
 
-  useEffect(() => {
-    capturedCountRef.current = 0;
-  }, [remaining]);
+  useEffect(
+    () => () => {
+      timeoutsRef.current.forEach(clearTimeout);
+      if (photoUrlRef.current) URL.revokeObjectURL(photoUrlRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     const query = window.matchMedia("(orientation: landscape)");
-    const onChange = () => setLandscape(query.matches);
+    const onChange = () => setWide(query.matches);
     query.addEventListener("change", onChange);
     return () => query.removeEventListener("change", onChange);
   }, []);
@@ -185,16 +238,18 @@ export function MagnetCamera({ eventId, guestId, frame, overlayUrl, remaining, j
     const track = videoTrackRef.current;
     const torch = trackTorch(track);
     if (torch) {
-      await track?.applyConstraints({ advanced: [{ torch: next === "on" }] } as unknown as MediaTrackConstraints).catch(() => undefined);
+      await track
+        ?.applyConstraints({ advanced: [{ torch: next === "on" }] } as unknown as MediaTrackConstraints)
+        .catch(() => undefined);
     }
   }
 
-  async function finishPhoto(source: HTMLCanvasElement) {
+  async function finishPhoto(source: HTMLCanvasElement, choice: CameraChoice) {
     const windowFrame: WindowFrame = {
-      widthMm: frame.widthMm,
-      heightMm: frame.heightMm,
-      windowW: frame.windowW,
-      windowH: frame.windowH,
+      widthMm: choice.frame.widthMm,
+      heightMm: choice.frame.heightMm,
+      windowW: choice.frame.windowW,
+      windowH: choice.frame.windowH,
     };
     const cropped = cropCanvasToWindow(source, source.width, source.height, windowFrame);
     const blob = await canvasToJpeg(cropped);
@@ -204,8 +259,9 @@ export function MagnetCamera({ eventId, guestId, frame, overlayUrl, remaining, j
 
   async function handleCapture() {
     const video = videoRef.current;
-    if (!video || loading || capturingRef.current) return;
-    if (remaining - capturedCountRef.current <= 0) {
+    const choice = active;
+    if (!video || !choice || loading || capturingRef.current) return;
+    if (remaining <= 0) {
       if (navigator.vibrate) navigator.vibrate([10, 50, 10]);
       return;
     }
@@ -236,11 +292,11 @@ export function MagnetCamera({ eventId, guestId, frame, overlayUrl, remaining, j
         ctx.translate(canvas.width, 0);
         ctx.scale(-1, 1);
       }
-      if (vintage && typeof ctx.filter !== "undefined") ctx.filter = VINTAGE_FILTER;
+      if (filterOn && typeof ctx.filter !== "undefined") ctx.filter = VINTAGE_FILTER;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       ctx.restore();
-      if (vintage && typeof ctx.filter === "undefined") applyVintagePixels(ctx, canvas.width, canvas.height);
-      await finishPhoto(canvas);
+      if (filterOn && typeof ctx.filter === "undefined") applyVintagePixels(ctx, canvas.width, canvas.height);
+      await finishPhoto(canvas, choice);
     } finally {
       capturingRef.current = false;
     }
@@ -254,7 +310,8 @@ export function MagnetCamera({ eventId, guestId, frame, overlayUrl, remaining, j
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
+    const choice = active;
+    if (!file || !choice) return;
     const url = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result));
@@ -274,19 +331,31 @@ export function MagnetCamera({ eventId, guestId, frame, overlayUrl, remaining, j
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.drawImage(image, 0, 0);
-    await finishPhoto(canvas);
+    await finishPhoto(canvas, choice);
   }
 
-  const inset = landscape
+  const inset = wide
     ? { top: 12, bottom: 12, right: 76, left: 132 }
-    : { top: 72, bottom: 140, right: 20, left: 20 };
-  const disabled = loading || remaining - capturedCountRef.current <= 0;
+    : { top: 88, bottom: 148, right: 16, left: 16 };
+  const disabled = loading || remaining <= 0;
   const fileInput = (
     <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
   );
 
-  if (mode === "sent") {
-    return <PrintStatus jobs={jobs} remaining={remaining} onAgain={handleRetake} onClose={onClose} />;
+  if (!active) return null;
+
+  if (mode === "sent" && photoUrl) {
+    return (
+      <PrintStatus
+        jobs={sentJobs ?? jobs}
+        quota={quota}
+        photoUrl={photoUrl}
+        frame={active.frame}
+        overlayUrl={active.overlayUrl}
+        onAgain={handleRetake}
+        onClose={onClose}
+      />
+    );
   }
 
   if (mode === "review" && photoUrl && photoBlob) {
@@ -296,12 +365,13 @@ export function MagnetCamera({ eventId, guestId, frame, overlayUrl, remaining, j
         blob={photoBlob}
         eventId={eventId}
         guestId={guestId}
-        frame={frame}
-        overlayUrl={overlayUrl}
+        frameId={active.id}
+        frame={active.frame}
+        overlayUrl={active.overlayUrl}
         onRetake={handleRetake}
-        onSent={() => {
-          capturedCountRef.current += 1;
-          onSent();
+        onSent={async () => {
+          const next = await onPrinted();
+          setSentJobs(next);
           setMode("sent");
         }}
       />
@@ -310,18 +380,18 @@ export function MagnetCamera({ eventId, guestId, frame, overlayUrl, remaining, j
 
   if (camFailed) {
     return (
-      <div className="cam-root bg-paper" dir="rtl">
+      <div className="cam-root" dir="rtl">
         {fileInput}
-        <button type="button" onClick={onClose} aria-label="סגור" className="cam-glass absolute right-5 top-12">
+        <button type="button" onClick={onClose} aria-label="סגור" className="cam-glass cam-close">
           <X className="h-4 w-4" />
         </button>
-        <div className="flex min-h-dvh flex-col items-center justify-center px-8 text-center">
-          <CameraOff className="mb-4 h-10 w-10 text-ink" />
+        <div className="cam-sheet">
+          <CameraOff className="h-10 w-10 text-ink" />
           <h1 className="font-display text-3xl text-ink">נפתח בתוך אפליקציה</h1>
-          <p className="mt-3 max-w-[260px] text-base leading-relaxed text-ink">
+          <p className="max-w-[260px] text-base leading-relaxed text-ink">
             הדפדפן הפנימי לא פותח את המצלמה. אפשר לצלם מהגלריה, או לפתוח ב-Safari או ב-Chrome.
           </p>
-          <button type="button" className="cam-send mt-8" onClick={() => fileInputRef.current?.click()}>
+          <button type="button" className="cam-send max-w-xs" onClick={() => fileInputRef.current?.click()}>
             <Upload className="h-5 w-5" />
             בחרו תמונה
           </button>
@@ -331,57 +401,94 @@ export function MagnetCamera({ eventId, guestId, frame, overlayUrl, remaining, j
   }
 
   return (
-    <div className="cam-root" dir="rtl" role="dialog" aria-modal="true" aria-label="מצלמה לאירוע">
+    <div className="cam-root" dir="rtl" role="dialog" aria-modal="true" aria-label="מצלמה לאירוע" data-orient={orient}>
       {fileInput}
       <canvas ref={canvasRef} className="hidden" />
       <div className={`pointer-events-none absolute inset-0 z-[115] bg-black transition-opacity duration-75 ${blackFx ? "opacity-100" : "opacity-0"}`} />
       <div className={`pointer-events-none absolute inset-0 z-[110] bg-white transition-opacity duration-150 ${shutterFx ? "opacity-80" : "opacity-0"}`} />
-      <div className={`pointer-events-none absolute inset-0 z-[101] bg-[#FFF5EC] ${frontFlash ? "opacity-100" : "opacity-0"}`} style={{ transitionDuration: frontFlash ? "50ms" : "200ms" }} />
+      <div
+        className={`pointer-events-none absolute inset-0 z-[101] bg-[#FFF5EC] ${frontFlash ? "opacity-100" : "opacity-0"}`}
+        style={{ transitionDuration: frontFlash ? "50ms" : "200ms" }}
+      />
       {camError ? (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-paper p-8 text-center" role="alert">
           <CameraOff className="mb-3 h-10 w-10 text-primary" />
           <p className="mb-5 text-base text-ink">{camError}</p>
           <div className="flex flex-col gap-3">
-            <button type="button" className="cam-send" onClick={() => void startCamera()}>נסו שוב</button>
+            <button type="button" className="cam-send" onClick={() => void startCamera()}>
+              נסו שוב
+            </button>
             {allowPicker ? (
-              <button type="button" className="cam-send" onClick={() => fileInputRef.current?.click()}>בחרו תמונה</button>
+              <button type="button" className="cam-send" onClick={() => fileInputRef.current?.click()}>
+                בחרו תמונה
+              </button>
             ) : null}
-            <button type="button" className="cam-text" onClick={onClose}>חזרה</button>
+            <button type="button" className="cam-text" onClick={onClose}>
+              חזרה
+            </button>
           </div>
         </div>
       ) : (
         <FrameViewfinder
-          frame={frame}
-          overlayUrl={overlayUrl}
+          frame={active.frame}
+          overlayUrl={active.overlayUrl}
           inset={inset}
           videoRef={videoRef}
           isFront={isFront}
-          filter={vintage ? VINTAGE_FILTER : "none"}
+          filter={filterOn ? VINTAGE_FILTER : "none"}
           loading={loading}
         />
       )}
-      <div className={`absolute inset-x-0 top-0 z-40 flex items-center justify-between px-5 ${landscape ? "pt-3" : "pt-12"}`}>
-        <button type="button" onClick={onClose} aria-label="סגור מצלמה" className="cam-glass h-10 w-10">
+      <div className={`cam-top ${wide ? "is-wide" : ""}`}>
+        <button type="button" onClick={onClose} aria-label="סגור מצלמה" className="cam-glass">
           <X className="h-4 w-4" />
         </button>
+        {both ? (
+          <div className="cam-orient" role="group" aria-label="כיוון המסגרת">
+            <button type="button" aria-pressed={orient === "landscape"} onClick={() => choose("landscape")}>
+              לרוחב
+            </button>
+            <button type="button" aria-pressed={orient === "portrait"} onClick={() => choose("portrait")}>
+              לאורך
+            </button>
+          </div>
+        ) : (
+          <span />
+        )}
         <p className="cam-quota">{remaining <= 0 ? "המכסה הסתיימה" : `${remaining} נותרו`}</p>
       </div>
       {!camError ? (
-        <div
-          className={landscape ? "absolute inset-y-0 left-0 z-40 grid w-[120px] grid-rows-[1fr_auto_1fr] items-center justify-items-center py-4" : "absolute inset-x-0 bottom-0 z-40 grid grid-cols-[1fr_auto_1fr] items-center px-6"}
-          style={landscape ? { paddingLeft: "env(safe-area-inset-left, 0px)" } : { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 34px)" }}
-        >
+        <div className={wide ? "cam-controls is-wide" : "cam-controls"}>
           <div className="flex items-center justify-center gap-3">
-            <button type="button" onClick={() => void toggleFlash()} aria-label={flash === "on" ? "כבו פלאש" : "הפעילו פלאש"} aria-pressed={flash === "on"} className="cam-glass">
+            <button
+              type="button"
+              onClick={() => void toggleFlash()}
+              aria-label={flash === "on" ? "כבו פלאש" : "הפעילו פלאש"}
+              aria-pressed={flash === "on"}
+              className="cam-glass"
+            >
               {flash === "on" ? <Zap className="h-5 w-5" /> : <ZapOff className="h-5 w-5" />}
             </button>
-            <button type="button" onClick={() => setVintage((value) => !value)} aria-label={vintage ? "בטלו פילטר וינטאג׳" : "הפעילו פילטר וינטאג׳"} aria-pressed={vintage} className="cam-glass">
-              <Film className="h-5 w-5" />
-            </button>
+            {VINTAGE_FILTER_ENABLED ? (
+              <button
+                type="button"
+                onClick={() => setVintage((value) => !value)}
+                aria-label={vintage ? "בטלו פילטר וינטאג׳" : "הפעילו פילטר וינטאג׳"}
+                aria-pressed={vintage}
+                className="cam-glass"
+              >
+                <Film className="h-5 w-5" />
+              </button>
+            ) : null}
           </div>
-          <button type="button" onClick={() => void handleCapture()} aria-label="צלמו תמונה" aria-disabled={disabled} className={`relative flex h-20 w-20 items-center justify-center ${disabled ? "opacity-25" : ""}`}>
-            <span className="absolute inset-0 rounded-full border-[3.5px] border-paper/80" />
-            <span className={`h-[61px] w-[61px] rounded-full ${loading ? "bg-paper/40" : "bg-pop"}`} />
+          <button
+            type="button"
+            onClick={() => void handleCapture()}
+            aria-label="צלמו תמונה"
+            aria-disabled={disabled}
+            className={`cam-shutter ${disabled ? "opacity-25" : ""}`}
+          >
+            <span className={loading ? "is-loading" : ""} />
             {loading ? <Loader2 className="absolute h-5 w-5 animate-spin text-ink" /> : null}
           </button>
           <div className="flex items-center justify-center">

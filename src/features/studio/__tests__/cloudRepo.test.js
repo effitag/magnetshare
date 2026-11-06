@@ -143,6 +143,15 @@ describe('cloud repo', () => {
       `frames/${event.id}/screen.webp`,
     ]);
   });
+
+  it('makes a portrait event frame from a landscape template', async () => {
+    const template = await repo.create('חתונה');
+    const portrait = await repo.duplicateForEvent(template.id, 'portrait');
+    const row = gateway.rows.get(portrait.id);
+    expect(row.is_template).toBe(false);
+    expect(row.height_mm).toBeGreaterThan(row.width_mm);
+  });
+
   it('turns a dropped connection into a network error the editor can recognise', async () => {
     gateway.offline = true;
     const err = await repo.list().catch((e) => e);

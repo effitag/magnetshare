@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { createPresetDoc, LAYOUTS, presetSize, SIZE_PRESETS } from '@/features/studio/model/presets';
+import { createPresetDoc, docForOrientation, LAYOUTS, presetSize, SIZE_PRESETS } from '@/features/studio/model/presets';
 import { migrateTemplate } from '@/features/studio/model/schema';
 import { ptToMm } from '@/features/studio/model/units';
 
@@ -59,5 +59,14 @@ describe('frame layouts', () => {
 
   it('blank: just the background', () => {
     expect(createPresetDoc('x', { sizeId: 'large', orientation: 'portrait', layoutId: 'blank' }).elements.map((e) => e.type)).toEqual(['background']);
+  });
+
+  it('rebuilds the opposite orientation from the saved layout', () => {
+    const landscape = createPresetDoc('x', { sizeId: 'regular', orientation: 'landscape', layoutId: 'polaroid' });
+    const portrait = docForOrientation(landscape, 'portrait');
+    expect(portrait.size).toMatchObject({ widthMm: 75, heightMm: 100 });
+    expect(portrait.elements.filter((element) => element.type === 'photo')).toHaveLength(1);
+    const bare = { ...landscape, tags: [] };
+    expect(docForOrientation(bare, 'portrait').size.heightMm).toBe(100);
   });
 });

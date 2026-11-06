@@ -14,12 +14,13 @@ type Props = {
   overlayUrl: string | null;
   width: number;
   children: ReactNode;
+  animate?: boolean;
 };
 
-export function MagnetFrame({ frame, overlayUrl, width, children }: Props) {
+export function MagnetFrame({ frame, overlayUrl, width, children, animate = false }: Props) {
   const height = Math.round(width * (frame.heightMm / frame.widthMm));
   return (
-    <div className="relative bg-ink shadow-2xl" style={{ width, height }}>
+    <div className={animate ? "cam-frame-swap relative bg-paper" : "relative bg-paper"} style={{ width, height }}>
       <div
         className="absolute overflow-hidden"
         style={{

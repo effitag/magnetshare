@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { canGoLive, eventPhase, phaseLabel, type EventPhase } from "@/features/admin/events/eventState";
+import { canGoLive, eventPhase, phaseLabel, slotState, type EventPhase } from "@/features/admin/events/eventState";
 
 export type EventListItem = {
   id: string;
@@ -7,9 +7,11 @@ export type EventListItem = {
   status: string;
   frameId: string | null;
   framePublished: boolean;
+  portraitId: string | null;
+  portraitPublished: boolean;
 };
 
-const LIVE_BLOCK = "כדי להפעיל את האירוע צריך מסגרת מפורסמת. במסגרות יוצרים מסגרת לאירוע, משייכים אותה, ומפרסמים.";
+const LIVE_BLOCK = "כדי להפעיל את האירוע צריך לפחות מסגרת מפורסמת אחת. מסגרת שכבר שויכה חייבת להיות מפורסמת. במסגרות יוצרים מסגרת לאירוע, משייכים אותה, ומפרסמים.";
 
 type Props = {
   events: EventListItem[];
@@ -35,12 +37,19 @@ export function EventList({ events, message, pendingId, onToggle }: Props) {
           const phase: EventPhase = eventPhase(event);
           const live = phase === "live";
           const ready = canGoLive(event);
+          const studioTo = event.frameId
+            ? `/admin/frames/${event.frameId}`
+            : event.portraitId
+              ? `/admin/frames/${event.portraitId}`
+              : "/admin/frames";
           return (
             <li key={event.id} className="rounded-2xl border-[3px] border-ink bg-sticker p-4">
               <Link className="block min-h-11" to={`/admin/events/${event.id}`}>
                 <h2 className="text-lg text-ink">{event.title}</h2>
                 <p className="mt-1 text-base text-ink">{phaseLabel[phase]}</p>
               </Link>
+              <p className="mt-2 text-base text-ink">מסגרת לרוחב: {slotState(event.frameId, event.framePublished)}</p>
+              <p className="text-base text-ink">מסגרת לאורך: {slotState(event.portraitId, event.portraitPublished)}</p>
               <label className="mt-3 flex min-h-12 items-center justify-between gap-3 text-base text-ink">
                 הפעלה
                 <input
@@ -55,7 +64,7 @@ export function EventList({ events, message, pendingId, onToggle }: Props) {
               {!live && !ready ? (
                 <p className="mt-2 text-base text-ink">
                   {LIVE_BLOCK}{" "}
-                  <Link className="underline" to={event.frameId ? `/admin/frames/${event.frameId}` : "/admin/frames"}>
+                  <Link className="underline" to={studioTo}>
                     אל המסגרות
                   </Link>
                 </p>

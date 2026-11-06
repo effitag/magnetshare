@@ -52,9 +52,9 @@ describe('ready-made frames', () => {
 
   it('tags the template with its kind of event and paints the background', () => {
     const doc = createPresetDoc('x', { sizeId: 'regular', orientation: 'landscape', layoutId: 'henna-bordeaux' });
-    expect(doc.tags).toEqual(['חינה']);
+    expect(doc.tags).toEqual(['חינה', 'size:regular', 'layout:henna-bordeaux', 'orient:landscape']);
     expect(doc.elements[0].fill).toBe('#6E1423');
-    expect(createPresetDoc('x').tags).toEqual([]);
+    expect(createPresetDoc('x').tags).toEqual(['size:regular', 'layout:polaroid', 'orient:landscape']);
   });
 
   it('puts a heart between the names', () => {
@@ -78,6 +78,6 @@ describe('built-in images in ready-made frames', () => {
     expect(images[1].src).toBe(images[0].src);
     await repo.insert(ready);
     expect(await repo.listFiles(doc.id)).toEqual([]);
-    expect((await repo.list())[0].tags).toEqual(['בר/בת מצווה']);
+    expect((await repo.list())[0].tags).toEqual(['בר/בת מצווה', 'size:regular', 'layout:mitzvah-bat', 'orient:landscape']);
   });
 });

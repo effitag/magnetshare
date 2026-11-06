@@ -25,7 +25,6 @@ export function GuestHero({ title, dateLabel, coverUrl, frameUrl, note }: Props)
             width={800}
             height={1000}
             decoding="async"
-            fetchPriority="high"
             onError={() => setCoverOk(false)}
           />
         ) : (
