@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { countMagnetsLeft } from "@/lib/magnets";
 import {
   ensureGuestSession,
   getEventCardBySlug,
@@ -97,20 +96,60 @@ export function CameraPage() {
   if (!ready) return <main className="guest-stage px-5 pt-10 text-base text-ink">טוענים…</main>;
 
   return (
-    <MagnetCamera
+    <CameraLive
       eventId={ready.eventId}
-      guestId={ready.guestId}
       quota={ready.quota}
+      guestId={ready.guestId}
       landscape={ready.landscape}
       portrait={ready.portrait}
-      remaining={countMagnetsLeft(ready.quota, ready.jobs)}
       jobs={ready.jobs}
+      onJobs={(jobs) => setReady((current) => (current ? { ...current, jobs } : current))}
       onClose={() => navigate(`/e/${slug}`)}
-      onPrinted={async () => {
-        const jobs = await listOwnPrintJobs(ready.eventId);
-        setReady((current) => (current ? { ...current, jobs } : current));
-        return jobs;
-      }}
+    />
+  );
+}
+
+function CameraLive({
+  eventId,
+  quota,
+  guestId,
+  landscape,
+  portrait,
+  jobs,
+  onJobs,
+  onClose,
+}: {
+  eventId: string;
+  quota: number;
+  guestId: string;
+  landscape: CameraChoice | null;
+  portrait: CameraChoice | null;
+  jobs: PrintJob[];
+  onJobs: (jobs: PrintJob[]) => void;
+  onClose: () => void;
+}) {
+  const reloadJobs = useCallback(async () => {
+    const next = await listOwnPrintJobs(eventId);
+    onJobs(next);
+    return next;
+  }, [eventId, onJobs]);
+
+  const refreshJobs = useCallback(async () => {
+    await ensureGuestSession();
+    return reloadJobs();
+  }, [reloadJobs]);
+
+  return (
+    <MagnetCamera
+      eventId={eventId}
+      guestId={guestId}
+      quota={quota}
+      landscape={landscape}
+      portrait={portrait}
+      jobs={jobs}
+      onClose={onClose}
+      onPrinted={reloadJobs}
+      onRefreshJobs={refreshJobs}
     />
   );
 }

@@ -141,14 +141,12 @@ export function GuestPage() {
   if (view === "loading") {
     return <main className="guest-stage px-5 pt-10 text-base text-ink">טוענים…</main>;
   }
-  const peek = landscape?.overlayUrl ?? portrait?.overlayUrl ?? null;
   return (
     <GuestLanding
       mode={view}
       title={title}
       dateLabel={when}
       coverUrl={coverUrl}
-      frameUrl={peek}
       magnetsLeft={left}
       shots={shots}
       landscape={landscape}

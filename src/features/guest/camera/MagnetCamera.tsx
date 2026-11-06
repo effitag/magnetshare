@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { CameraOff, Film, Loader2, RotateCw, Upload, X, Zap, ZapOff } from "lucide-react";
 import { canvasToJpeg, cropCanvasToWindow, type WindowFrame } from "@/lib/cropToWindow";
+import { countMagnetsLeft } from "@/lib/magnets";
 import type { PrintJob } from "@/services/types";
 import { inAppBrowser } from "../browser";
 import { FrameViewfinder } from "./FrameViewfinder";
@@ -10,6 +11,17 @@ import { PrintStatus } from "./PrintStatus";
 
 export const VINTAGE_FILTER_ENABLED = false;
 const VINTAGE_FILTER = "sepia(0.35) contrast(0.88) brightness(1.08) saturate(1.15)";
+
+let cameraQueue: Promise<void> = Promise.resolve();
+
+function enqueueCamera(run: () => Promise<void>) {
+  const job = cameraQueue.then(run, run);
+  cameraQueue = job.then(
+    () => undefined,
+    () => undefined,
+  );
+  return job;
+}
 
 export type CameraChoice = {
   id: string;
@@ -57,10 +69,10 @@ type Props = {
   quota: number;
   landscape: CameraChoice | null;
   portrait: CameraChoice | null;
-  remaining: number;
   jobs: PrintJob[];
   onClose: () => void;
   onPrinted: () => Promise<PrintJob[]>;
+  onRefreshJobs: () => Promise<PrintJob[]>;
 };
 
 export function MagnetCamera({
@@ -69,10 +81,10 @@ export function MagnetCamera({
   quota,
   landscape,
   portrait,
-  remaining,
   jobs,
   onClose,
   onPrinted,
+  onRefreshJobs,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -83,6 +95,13 @@ export function MagnetCamera({
   const startIdRef = useRef(0);
   const timeoutsRef = useRef<number[]>([]);
   const photoUrlRef = useRef<string | null>(null);
+  const modeRef = useRef<"camera" | "review" | "sent">("camera");
+  const isFrontRef = useRef(false);
+  const camFailedRef = useRef(false);
+  const facingSeen = useRef(false);
+  const ensureRef = useRef<() => Promise<void>>(async () => undefined);
+  const refreshRef = useRef(onRefreshJobs);
+  const refreshGen = useRef(0);
 
   const [isFront, setIsFront] = useState(false);
   const [flash, setFlash] = useState<"off" | "on">("off");
@@ -105,6 +124,12 @@ export function MagnetCamera({
     return landscape ? "landscape" : "portrait";
   });
   const [sentJobs, setSentJobs] = useState<PrintJob[] | null>(null);
+  const [serverJobs, setServerJobs] = useState(jobs);
+  modeRef.current = mode;
+  isFrontRef.current = isFront;
+  camFailedRef.current = camFailed;
+  refreshRef.current = onRefreshJobs;
+  const left = countMagnetsLeft(quota, serverJobs);
 
   const both = Boolean(landscape && portrait);
   const active = (orient === "portrait" ? portrait : landscape) ?? landscape ?? portrait;
@@ -143,6 +168,10 @@ export function MagnetCamera({
   );
 
   useEffect(() => {
+    setServerJobs(jobs);
+  }, [jobs]);
+
+  useEffect(() => {
     const query = window.matchMedia("(orientation: landscape)");
     const onChange = () => setWide(query.matches);
     query.addEventListener("change", onChange);
@@ -151,11 +180,37 @@ export function MagnetCamera({
 
   useEffect(() => {
     if (mode !== "camera" || camFailed) return undefined;
-    void startCamera();
-    return stopCamera;
-    // startCamera closes over the latest facing mode. The id guard drops stale streams.
+    if (facingSeen.current !== isFront) {
+      facingSeen.current = isFront;
+      stopTracks();
+    }
+    void ensureRef.current();
+    void pullJobs();
+    const onBack = () => {
+      if (document.visibilityState === "hidden") return;
+      if (modeRef.current !== "camera") return;
+      void ensureRef.current();
+      void pullJobs();
+    };
+    document.addEventListener("visibilitychange", onBack);
+    window.addEventListener("pageshow", onBack);
+    window.addEventListener("focus", onBack);
+    return () => {
+      document.removeEventListener("visibilitychange", onBack);
+      window.removeEventListener("pageshow", onBack);
+      window.removeEventListener("focus", onBack);
+    };
+    // ensureRef and pullJobs read refs. Facing changes stop the old tracks first.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFront, mode, camFailed]);
+
+  useEffect(
+    () => () => {
+      startIdRef.current += 1;
+      stopTracks();
+    },
+    [],
+  );
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -165,52 +220,102 @@ export function MagnetCamera({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  async function startCamera() {
+  function stopTracks() {
+    startIdRef.current += 1;
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    videoTrackRef.current = null;
+  }
+
+  async function attach(video: HTMLVideoElement, stream: MediaStream) {
+    video.autoplay = true;
+    video.muted = true;
+    video.defaultMuted = true;
+    video.playsInline = true;
+    video.setAttribute("playsinline", "true");
+    video.setAttribute("webkit-playsinline", "true");
+    if (video.srcObject !== stream) video.srcObject = stream;
+    try {
+      await video.play();
+    } catch {
+      /* a later visibility check plays again */
+    }
+  }
+
+  function tracksAreLive(stream: MediaStream | null): stream is MediaStream {
+    const tracks = stream?.getVideoTracks() ?? [];
+    return tracks.length > 0 && tracks.every((track) => track.readyState === "live");
+  }
+
+  async function openFacing(front: boolean) {
+    const facingMode = front ? "user" : "environment";
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false,
+      });
+    } catch (error) {
+      const name = error instanceof DOMException ? error.name : "";
+      if (name === "OverconstrainedError") {
+        return navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
+      }
+      throw error;
+    }
+  }
+
+  async function stepLive() {
+    if (modeRef.current !== "camera" || camFailedRef.current) return;
+    const video = videoRef.current;
+    if (!video) return;
+
+    const existing = streamRef.current;
+    if (tracksAreLive(existing)) {
+      videoTrackRef.current = existing.getVideoTracks()[0] ?? null;
+      await attach(video, existing);
+      setLoading(false);
+      return;
+    }
+
     if (!navigator.mediaDevices?.getUserMedia) {
       setCamFailed(true);
       setLoading(false);
       return;
     }
+
     const id = ++startIdRef.current;
+    const facing = isFrontRef.current;
+    existing?.getTracks().forEach((track) => track.stop());
+    if (streamRef.current === existing) {
+      streamRef.current = null;
+      videoTrackRef.current = null;
+    }
     setLoading(true);
     setCamError(null);
-    streamRef.current?.getTracks().forEach((track) => track.stop());
     try {
       let stream: MediaStream;
-      const facingMode = isFront ? "user" : "environment";
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
-          audio: false,
-        });
+        stream = await openFacing(facing);
       } catch (error) {
         const name = error instanceof DOMException ? error.name : "";
-        if (name === "OverconstrainedError") {
-          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
-        } else if (name === "NotAllowedError" && inAppBrowser(navigator.userAgent)) {
-          if (id !== startIdRef.current) return;
-          setCamFailed(true);
-          setLoading(false);
-          return;
-        } else if (name === "NotAllowedError" || name === "NotFoundError" || name === "NotReadableError") {
-          throw error;
-        } else {
-          if (id !== startIdRef.current) return;
+        if (id !== startIdRef.current) return;
+        if (name === "NotAllowedError" && inAppBrowser(navigator.userAgent)) {
           setCamFailed(true);
           setLoading(false);
           return;
         }
+        if (name === "NotAllowedError" || name === "NotFoundError" || name === "NotReadableError") throw error;
+        setCamFailed(true);
+        setLoading(false);
+        return;
       }
-      if (id !== startIdRef.current) {
+      if (id !== startIdRef.current || modeRef.current !== "camera" || isFrontRef.current !== facing) {
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play().catch(() => undefined);
-      }
       videoTrackRef.current = stream.getVideoTracks()[0] ?? null;
+      const node = videoRef.current;
+      if (node) await attach(node, stream);
     } catch (error) {
       if (id !== startIdRef.current) return;
       const name = error instanceof DOMException ? error.name : "";
@@ -226,10 +331,30 @@ export function MagnetCamera({
     }
   }
 
-  function stopCamera() {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
-    videoTrackRef.current = null;
+  function ensureLiveView() {
+    return enqueueCamera(() => stepLive());
+  }
+  ensureRef.current = ensureLiveView;
+
+  const bindVideo = useCallback((node: HTMLVideoElement | null) => {
+    videoRef.current = node;
+    if (node && modeRef.current === "camera" && !camFailedRef.current) void ensureRef.current();
+  }, []);
+
+  async function pullJobs() {
+    const gen = ++refreshGen.current;
+    try {
+      const next = await refreshRef.current();
+      if (gen === refreshGen.current) setServerJobs(next);
+    } catch {
+      /* the pill keeps the last successful count */
+    }
+  }
+
+  function retryCamera() {
+    setCamError(null);
+    stopTracks();
+    void ensureRef.current();
   }
 
   async function toggleFlash() {
@@ -261,7 +386,7 @@ export function MagnetCamera({
     const video = videoRef.current;
     const choice = active;
     if (!video || !choice || loading || capturingRef.current) return;
-    if (remaining <= 0) {
+    if (left <= 0) {
       if (navigator.vibrate) navigator.vibrate([10, 50, 10]);
       return;
     }
@@ -337,46 +462,12 @@ export function MagnetCamera({
   const inset = wide
     ? { top: 12, bottom: 12, right: 76, left: 132 }
     : { top: 88, bottom: 148, right: 16, left: 16 };
-  const disabled = loading || remaining <= 0;
+  const disabled = loading || left <= 0;
   const fileInput = (
     <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
   );
 
   if (!active) return null;
-
-  if (mode === "sent" && photoUrl) {
-    return (
-      <PrintStatus
-        jobs={sentJobs ?? jobs}
-        quota={quota}
-        photoUrl={photoUrl}
-        frame={active.frame}
-        overlayUrl={active.overlayUrl}
-        onAgain={handleRetake}
-        onClose={onClose}
-      />
-    );
-  }
-
-  if (mode === "review" && photoUrl && photoBlob) {
-    return (
-      <MagnetReview
-        photoUrl={photoUrl}
-        blob={photoBlob}
-        eventId={eventId}
-        guestId={guestId}
-        frameId={active.id}
-        frame={active.frame}
-        overlayUrl={active.overlayUrl}
-        onRetake={handleRetake}
-        onSent={async () => {
-          const next = await onPrinted();
-          setSentJobs(next);
-          setMode("sent");
-        }}
-      />
-    );
-  }
 
   if (camFailed) {
     return (
@@ -400,8 +491,20 @@ export function MagnetCamera({
     );
   }
 
+  const showLive = mode === "camera";
+
   return (
-    <div className="cam-root" dir="rtl" role="dialog" aria-modal="true" aria-label="מצלמה לאירוע" data-orient={orient}>
+    <>
+    <div
+      className="cam-root"
+      dir="rtl"
+      data-orient={orient}
+      aria-hidden={showLive ? undefined : true}
+      role={showLive ? "dialog" : undefined}
+      aria-modal={showLive ? true : undefined}
+      aria-label={showLive ? "מצלמה לאירוע" : undefined}
+      style={showLive ? undefined : { visibility: "hidden" }}
+    >
       {fileInput}
       <canvas ref={canvasRef} className="hidden" />
       <div className={`pointer-events-none absolute inset-0 z-[115] bg-black transition-opacity duration-75 ${blackFx ? "opacity-100" : "opacity-0"}`} />
@@ -415,7 +518,7 @@ export function MagnetCamera({
           <CameraOff className="mb-3 h-10 w-10 text-primary" />
           <p className="mb-5 text-base text-ink">{camError}</p>
           <div className="flex flex-col gap-3">
-            <button type="button" className="cam-send" onClick={() => void startCamera()}>
+            <button type="button" className="cam-send" onClick={retryCamera}>
               נסו שוב
             </button>
             {allowPicker ? (
@@ -433,7 +536,7 @@ export function MagnetCamera({
           frame={active.frame}
           overlayUrl={active.overlayUrl}
           inset={inset}
-          videoRef={videoRef}
+          videoRef={bindVideo}
           isFront={isFront}
           filter={filterOn ? VINTAGE_FILTER : "none"}
           loading={loading}
@@ -455,7 +558,7 @@ export function MagnetCamera({
         ) : (
           <span />
         )}
-        <p className="cam-quota">{remaining <= 0 ? "המכסה הסתיימה" : `${remaining} נותרו`}</p>
+        <p className="cam-quota">{left <= 0 ? "המכסה הסתיימה" : `${left} נותרו`}</p>
       </div>
       {!camError ? (
         <div className={wide ? "cam-controls is-wide" : "cam-controls"}>
@@ -499,5 +602,36 @@ export function MagnetCamera({
         </div>
       ) : null}
     </div>
+    {mode === "review" && photoUrl && photoBlob ? (
+      <MagnetReview
+        photoUrl={photoUrl}
+        blob={photoBlob}
+        eventId={eventId}
+        guestId={guestId}
+        frameId={active.id}
+        frame={active.frame}
+        overlayUrl={active.overlayUrl}
+        onRetake={handleRetake}
+        onSent={async () => {
+          const next = await onPrinted();
+          refreshGen.current += 1;
+          setServerJobs(next);
+          setSentJobs(next);
+          setMode("sent");
+        }}
+      />
+    ) : null}
+    {mode === "sent" && photoUrl ? (
+      <PrintStatus
+        jobs={sentJobs ?? jobs}
+        quota={quota}
+        photoUrl={photoUrl}
+        frame={active.frame}
+        overlayUrl={active.overlayUrl}
+        onAgain={handleRetake}
+        onClose={onClose}
+      />
+    ) : null}
+    </>
   );
 }

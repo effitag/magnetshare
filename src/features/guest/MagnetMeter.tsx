@@ -27,7 +27,7 @@ export function MagnetMeter({ left, shots = [], onOpen }: Props) {
   const count = Math.max(0, left);
   return (
     <div>
-      <ul className="guest-magnets">
+      <ul className="guest-magnet-row">
         {shots.map((shot) => (
           <li key={shot.id}>
             <button

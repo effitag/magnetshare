@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type Ref } from "react";
 import { Loader2 } from "lucide-react";
 import { MagnetFrame, type CameraFrame } from "./MagnetFrame";
 
@@ -8,7 +8,7 @@ type Props = {
   frame: CameraFrame;
   overlayUrl: string | null;
   inset: Inset;
-  videoRef: RefObject<HTMLVideoElement>;
+  videoRef: Ref<HTMLVideoElement>;
   isFront: boolean;
   filter: string;
   loading: boolean;

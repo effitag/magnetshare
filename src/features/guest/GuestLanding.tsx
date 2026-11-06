@@ -17,7 +17,6 @@ type Props = {
   title?: string;
   dateLabel?: string | null;
   coverUrl?: string | null;
-  frameUrl?: string | null;
   magnetsLeft?: number;
   shots?: GuestShot[];
   landscape?: GuestFrame | null;
@@ -41,7 +40,6 @@ export function GuestLanding({
   title = "",
   dateLabel,
   coverUrl,
-  frameUrl,
   magnetsLeft = 0,
   shots = [],
   landscape = null,
@@ -59,20 +57,21 @@ export function GuestLanding({
     portrait;
 
   return (
-    <main className="guest-stage">
-      <GuestHero
-        title={title}
-        dateLabel={dateLabel}
-        coverUrl={coverUrl}
-        frameUrl={frameUrl}
-        note={inApp ? "כדי לצלם בנוחות, פתחו את הקישור בספארי או בכרום. אפשר גם להמשיך כאן." : null}
-      />
-      <div className="guest-body">
-        <MagnetMeter left={magnetsLeft} shots={shots} onOpen={setOpenId} />
-        <p className="guest-steps">מצלמים · מאשרים · מקבלים מגנט</p>
-        <p className="guest-privacy">
-          <Link to="/privacy">מדיניות הפרטיות</Link>
-        </p>
+    <main className="guest-stage guest-fit">
+      <div className="guest-scroll">
+        <GuestHero
+          title={title}
+          dateLabel={dateLabel}
+          coverUrl={coverUrl}
+          note={inApp ? "כדי לצלם בנוחות, פתחו את הקישור בספארי או בכרום. אפשר גם להמשיך כאן." : null}
+        />
+        <div className="guest-body">
+          <MagnetMeter left={magnetsLeft} shots={shots} onOpen={setOpenId} />
+          <p className="guest-steps">מצלמים · מאשרים · מקבלים מגנט</p>
+          <p className="guest-privacy">
+            <Link to="/privacy">מדיניות הפרטיות</Link>
+          </p>
+        </div>
       </div>
       <Link className="guest-shoot" to={cameraTo ?? "#"}>
         <CameraIcon />

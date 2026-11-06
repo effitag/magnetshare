@@ -4,15 +4,12 @@ type Props = {
   title: string;
   dateLabel?: string | null;
   coverUrl?: string | null;
-  frameUrl?: string | null;
   note?: string | null;
 };
 
-export function GuestHero({ title, dateLabel, coverUrl, frameUrl, note }: Props) {
+export function GuestHero({ title, dateLabel, coverUrl, note }: Props) {
   const [coverOk, setCoverOk] = useState(true);
-  const [frameOk, setFrameOk] = useState(true);
   const showCover = Boolean(coverUrl) && coverOk;
-  const showFrame = Boolean(frameUrl) && frameOk;
 
   return (
     <div className={showCover ? "guest-top" : "guest-top is-plain"}>
@@ -39,21 +36,6 @@ export function GuestHero({ title, dateLabel, coverUrl, frameUrl, note }: Props)
         <h1 className="guest-name">{title}</h1>
         {dateLabel ? <p className="guest-date">{dateLabel}</p> : null}
       </div>
-
-      {showFrame ? (
-        <figure className="guest-peek">
-          <div className="guest-peek-window">
-            <img
-              src={frameUrl ?? undefined}
-              alt="המסגרת שתודפס על המגנט"
-              width={480}
-              height={600}
-              decoding="async"
-              onError={() => setFrameOk(false)}
-            />
-          </div>
-        </figure>
-      ) : null}
     </div>
   );
 }
