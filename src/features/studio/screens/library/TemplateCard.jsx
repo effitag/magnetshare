@@ -8,7 +8,7 @@ function sizeLabel({ widthMm, heightMm }) {
   return `${widthMm / 10}×${heightMm / 10}`;
 }
 
-export default function TemplateCard({ item, onOpen, onRename, onDelete, onDuplicate, onAssign, onPublish, onUnpublish, isPublished }) {
+export default function TemplateCard({ item, onOpen, onRename, onDelete }) {
   const { name, updatedAt, size, tags, thumbnailUrl } = item;
   const shown = visibleTags(tags);
   const edited = updatedAt ? dateFormat.format(new Date(updatedAt)) : '';
@@ -41,26 +41,6 @@ export default function TemplateCard({ item, onOpen, onRename, onDelete, onDupli
         <IconButton label="שינוי שם" onClick={onRename}>
           <Icon name="pencil" />
         </IconButton>
-        {onDuplicate && (
-          <button type="button" className="min-h-11 px-2 text-base text-ink" onClick={onDuplicate}>
-            מסגרת לאירוע
-          </button>
-        )}
-        {onAssign && (
-          <button type="button" className="min-h-11 px-2 text-base text-ink" onClick={onAssign}>
-            שיוך לאירוע
-          </button>
-        )}
-        {onPublish && !isPublished && (
-          <button type="button" className="min-h-11 px-2 text-base text-ink" onClick={onPublish}>
-            פרסום
-          </button>
-        )}
-        {onUnpublish && (
-          <button type="button" className="min-h-11 px-2 text-base text-ink" onClick={onUnpublish}>
-            ביטול פרסום
-          </button>
-        )}
         <IconButton label="מחיקה" onClick={onDelete} className="hover:text-destructive">
           <Icon name="trash" />
         </IconButton>

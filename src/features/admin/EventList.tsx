@@ -11,7 +11,7 @@ export type EventListItem = {
   portraitPublished: boolean;
 };
 
-const LIVE_BLOCK = "כדי להפעיל את האירוע צריך לפחות מסגרת מפורסמת אחת. מסגרת שכבר שויכה חייבת להיות מפורסמת. במסגרות יוצרים מסגרת לאירוע, משייכים אותה, ומפרסמים.";
+const LIVE_BLOCK = "כדי להפעיל את האירוע צריך לבחור לו מסגרת.";
 
 type Props = {
   events: EventListItem[];
@@ -25,10 +25,7 @@ export function EventList({ events, message, pendingId, onToggle }: Props) {
     <div>
       {message ? (
         <p role="alert" className="mt-4 rounded-2xl border-[3px] border-ink bg-sticker px-4 py-3 text-base text-ink">
-          {message}{" "}
-          <Link className="underline" to="/admin/frames">
-            אל המסגרות
-          </Link>
+          {message}
         </p>
       ) : null}
       {events.length === 0 ? <p className="mt-6 text-base text-ink">עוד אין אירועים.</p> : null}
@@ -37,11 +34,6 @@ export function EventList({ events, message, pendingId, onToggle }: Props) {
           const phase: EventPhase = eventPhase(event);
           const live = phase === "live";
           const ready = canGoLive(event);
-          const studioTo = event.frameId
-            ? `/admin/frames/${event.frameId}`
-            : event.portraitId
-              ? `/admin/frames/${event.portraitId}`
-              : "/admin/frames";
           return (
             <li key={event.id} className="rounded-2xl border-[3px] border-ink bg-sticker p-4">
               <Link className="block min-h-11" to={`/admin/events/${event.id}`}>
@@ -64,8 +56,8 @@ export function EventList({ events, message, pendingId, onToggle }: Props) {
               {!live && !ready ? (
                 <p className="mt-2 text-base text-ink">
                   {LIVE_BLOCK}{" "}
-                  <Link className="underline" to={studioTo}>
-                    אל המסגרות
+                  <Link className="underline" to={`/admin/events/${event.id}`}>
+                    לבחירת מסגרת
                   </Link>
                 </p>
               ) : null}

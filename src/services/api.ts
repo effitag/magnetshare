@@ -1,6 +1,6 @@
 import { AppError, toAppError } from "@/lib/errors";
 import { isEventType, type EventType } from "@/lib/eventTypes";
-import { countMagnetsLeft, slotForSize, type FrameSlot } from "@/lib/magnets";
+import { countMagnetsLeft, type FrameSlot } from "@/lib/magnets";
 import { supabase } from "@/lib/supabase";
 import { isFrameObjectPath } from "@/features/studio/storage/paths";
 import type { EventCard, Frame, NewLeadInput, PrintJob, PrintJobStatus } from "@/services/types";
@@ -249,6 +249,7 @@ export type AdminEventDetail = {
   printQuota: number;
   coverPath: string | null;
   eventType: EventType | null;
+  status: "draft" | "live" | "closed";
 };
 
 export type EventDraft = {
@@ -304,7 +305,7 @@ export async function listAdminEvents(): Promise<AdminEventRow[]> {
   });
 }
 
-const LIVE_BLOCK = "כדי להפעיל את האירוע צריך לפחות מסגרת מפורסמת אחת. מסגרת שכבר שויכה חייבת להיות מפורסמת. במסגרות יוצרים מסגרת לאירוע, משייכים אותה, ומפרסמים.";
+const LIVE_BLOCK = "כדי להפעיל את האירוע צריך לבחור לו מסגרת. בוחרים אותה במסך האירוע.";
 
 export async function setEventLiveSwitch(eventId: string, live: boolean): Promise<void> {
   if (!live) {
@@ -344,7 +345,7 @@ function readEventType(row: { event_type?: unknown }): EventType | null {
 }
 
 export async function getAdminEvent(id: string): Promise<AdminEventDetail> {
-  const columns = "id, slug, title, event_date, print_quota, cover_path";
+  const columns = "id, slug, title, event_date, print_quota, cover_path, status";
   const first = await supabase.from("events").select(`${columns}, event_type`).eq("id", id).single();
   // Until the event_type migration runs, read the event without it.
   const { data, error } = first.error && missingColumn(first.error, "event_type")
@@ -359,6 +360,7 @@ export async function getAdminEvent(id: string): Promise<AdminEventDetail> {
     printQuota: data.print_quota as number,
     coverPath: (data.cover_path as string | null) ?? null,
     eventType: readEventType(data as { event_type?: unknown }),
+    status: data.status as AdminEventDetail["status"],
   };
 }
 
@@ -388,6 +390,7 @@ async function insertEvent(draft: EventDraft, slug: string): Promise<AdminEventD
     printQuota: draft.printQuota,
     coverPath: null,
     eventType: draft.eventType ?? null,
+    status: "draft",
   };
 }
 
@@ -413,10 +416,11 @@ export async function updateEventDetails(eventId: string, draft: EventDraft): Pr
       ...eventTypeColumn(draft),
     })
     .eq("id", eventId)
-    .select("id, slug, title, cover_path")
+    .select("id, slug, title, cover_path, status")
     .single();
   if (error) throw toAppError(error, "לא הצלחנו לשמור את האירוע.");
   const saved = {
+    status: data.status as AdminEventDetail["status"],
     id: data.id as string,
     slug: data.slug as string,
     title: data.title as string,
@@ -444,75 +448,67 @@ export async function saveEventCover(eventId: string, file: File): Promise<strin
   return path;
 }
 
-function slotMismatch(widthMm: number, heightMm: number): string {
-  if (Number(widthMm) === Number(heightMm)) return "מסגרת ריבוע נשמרת כמסגרת לאורך.";
-  return Number(widthMm) > Number(heightMm)
-    ? "המסגרת רחבה יותר מגובהה, אז היא לרוחב."
-    : "המסגרת גבוהה יותר מרוחבה, אז היא לאורך.";
+export type FrameTemplateRow = {
+  id: string;
+  name: string;
+  design: unknown;
+  widthMm: number;
+  heightMm: number;
+};
+
+/** The template library, newest first, with each template's design. */
+export async function listFrameTemplates(): Promise<FrameTemplateRow[]> {
+  const { data, error } = await supabase
+    .from("frames")
+    .select("id, name, design, width_mm, height_mm")
+    .eq("is_template", true)
+    .order("updated_at", { ascending: false });
+  if (error) throw toAppError(error, "לא הצלחנו לטעון את התבניות.");
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    name: row.name as string,
+    design: row.design,
+    widthMm: Number(row.width_mm),
+    heightMm: Number(row.height_mm),
+  }));
 }
 
-export async function assignFrameToEvent(frameId: string, eventId: string, slot: FrameSlot): Promise<void> {
-  const frame = await supabase
-    .from("frames")
-    .select("is_template, is_published, width_mm, height_mm")
-    .eq("id", frameId)
-    .maybeSingle();
-  if (frame.error) throw toAppError(frame.error, "לא הצלחנו לבדוק את המסגרת.");
-  if (!frame.data || frame.data.is_template === true) {
-    throw new Error("אי אפשר לשייך תבנית. צרו ממנה מסגרת לאירוע.");
-  }
-  const width = Number(frame.data.width_mm);
-  const height = Number(frame.data.height_mm);
-  if (slotForSize(width, height) !== slot) throw new Error(slotMismatch(width, height));
-  const target = await supabase.from("events").select("status, frame_id, frame_portrait_id").eq("id", eventId).maybeSingle();
-  const legacyTarget = target.error && missingColumn(target.error, "frame_portrait_id");
-  const eventRow = legacyTarget
-    ? await supabase.from("events").select("status, frame_id").eq("id", eventId).maybeSingle()
-    : target;
-  if (eventRow.error || !eventRow.data) throw toAppError(eventRow.error, "האירוע לא נמצא.");
-  if (legacyTarget && slot === "portrait") {
-    throw new Error("כדי לשייך מסגרת לאורך צריך קודם להריץ את עדכון המסד.");
-  }
-  if (eventRow.data.status === "live" && frame.data.is_published !== true) {
-    throw new Error("אי אפשר לשייך מסגרת שלא פורסמה לאירוע חי.");
-  }
-  const othersQuery = legacyTarget
-    ? await supabase.from("events").select("id, status, title, frame_id").eq("frame_id", frameId)
-    : await supabase.from("events").select("id, status, title, frame_id, frame_portrait_id").or(`frame_id.eq.${frameId},frame_portrait_id.eq.${frameId}`);
-  if (othersQuery.error) throw toAppError(othersQuery.error, "לא הצלחנו לבדוק את השיוך.");
-  const others = (othersQuery.data ?? []) as {
-    id: string;
-    status: string;
-    title: string;
-    frame_id: string | null;
-    frame_portrait_id?: string | null;
-  }[];
-  const blocking = others.find((row) => row.id !== eventId && row.status === "live");
-  if (blocking) throw new Error(`המסגרת כבר משויכת לאירוע חי «${blocking.title}».`);
-  for (const row of others) {
-    if (row.id === eventId) continue;
-    const patch: { frame_id?: null; frame_portrait_id?: null } = {};
-    if (row.frame_id === frameId) patch.frame_id = null;
-    if (row.frame_portrait_id === frameId) patch.frame_portrait_id = null;
-    if (!Object.keys(patch).length) continue;
-    const cleared = await supabase.from("events").update(patch).eq("id", row.id);
-    if (cleared.error) throw toAppError(cleared.error, "לא הצלחנו לשחרר את המסגרת מהאירוע הקודם.");
-  }
-  const current = eventRow.data as { frame_id: string | null; frame_portrait_id?: string | null };
-  const patch: { frame_id?: string | null; frame_portrait_id?: string | null } =
-    slot === "landscape"
-      ? { frame_id: frameId, ...(current.frame_portrait_id === frameId ? { frame_portrait_id: null } : {}) }
-      : { frame_portrait_id: frameId, ...(current.frame_id === frameId ? { frame_id: null } : {}) };
-  const update = await supabase.from("events").update(patch).eq("id", eventId);
-  if (update.error) {
-    if (update.error.message?.includes("event_frame_is_template")) {
-      throw new Error("אי אפשר לשייך תבנית. צרו ממנה מסגרת לאירוע.");
+export type EventFrameSlot = {
+  id: string;
+  name: string;
+  sourceTemplateId: string | null;
+  previewUrl: string | null;
+};
+
+export type EventFrames = {
+  landscape: EventFrameSlot | null;
+  portrait: EventFrameSlot | null;
+};
+
+/** The frames the event shows its guests now, with a preview image of each. */
+export async function getEventFrames(eventId: string): Promise<EventFrames> {
+  const event = await supabase.from("events").select("frame_id, frame_portrait_id").eq("id", eventId).single();
+  if (event.error) throw toAppError(event.error, "לא הצלחנו לטעון את המסגרת של האירוע.");
+  const ids = [event.data.frame_id, event.data.frame_portrait_id].filter((id): id is string => Boolean(id));
+  const frames = new Map<string, EventFrameSlot>();
+  if (ids.length) {
+    const listed = await supabase.from("frames").select("id, name, preview_path, source_template_id").in("id", ids);
+    if (listed.error) throw toAppError(listed.error, "לא הצלחנו לטעון את המסגרת של האירוע.");
+    for (const row of listed.data ?? []) {
+      const id = row.id as string;
+      const preview = (row.preview_path as string | null) ?? `frames/${id}/screen.webp`;
+      frames.set(id, {
+        id,
+        name: (row.name as string) ?? "",
+        sourceTemplateId: (row.source_template_id as string | null) ?? null,
+        previewUrl: await signedMediaUrl(preview).catch(() => null),
+      });
     }
-    if (missingColumn(update.error, "frame_portrait_id")) {
-      throw new Error("כדי לשייך מסגרת לאורך צריך קודם להריץ את עדכון המסד.");
-    }
-    throw toAppError(update.error, "לא הצלחנו לשייך את המסגרת לאירוע.");
   }
+  return {
+    landscape: event.data.frame_id ? frames.get(event.data.frame_id as string) ?? null : null,
+    portrait: event.data.frame_portrait_id ? frames.get(event.data.frame_portrait_id as string) ?? null : null,
+  };
 }
 
 const ATTACH_ERRORS: Record<string, string> = {

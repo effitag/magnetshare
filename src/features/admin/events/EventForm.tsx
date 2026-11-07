@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { EVENT_TYPES, type EventType } from "@/lib/eventTypes";
 
 const fieldClass =
   "field-scroll sticker-card sticker-flat box-border min-h-11 w-full min-w-0 max-w-full bg-sticker px-3 text-base text-ink";
@@ -7,6 +8,7 @@ export type EventFormValue = {
   title: string;
   eventDate: string;
   printQuota: number;
+  eventType: EventType | null;
 };
 
 type Props = {
@@ -37,8 +39,32 @@ export function EventForm({ value, coverName, error, pending, onChange, onCover,
     <form className="grid grid-cols-[minmax(0,1fr)] gap-3 overflow-x-clip" onSubmit={submit} noValidate>
       <label className="flex min-w-0 flex-col gap-1 text-base text-ink">
         שם האירוע
+        <span className="text-base text-ink">כך יופיע על המגנט</span>
         <input className={fieldClass} value={value.title} onChange={(event) => onChange({ ...value, title: event.target.value })} />
       </label>
+      <fieldset className="flex min-w-0 flex-col gap-2 text-base text-ink">
+        <legend className="mb-1">סוג האירוע</legend>
+        <div className="flex flex-wrap gap-2">
+          {EVENT_TYPES.map((type) => (
+            <label
+              key={type.id}
+              className={`inline-flex min-h-11 cursor-pointer items-center rounded-full border-[3px] border-ink px-4 text-base has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 ${
+                value.eventType === type.id ? "bg-pop" : "bg-sticker"
+              }`}
+            >
+              <input
+                type="radio"
+                name="event-type"
+                className="sr-only"
+                value={type.id}
+                checked={value.eventType === type.id}
+                onChange={() => onChange({ ...value, eventType: type.id })}
+              />
+              {type.label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
       <label className="flex min-w-0 flex-col gap-1 text-base text-ink">
         תאריך
         <span className="block min-w-0 overflow-hidden">
