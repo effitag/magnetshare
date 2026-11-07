@@ -68,11 +68,21 @@ that asks for it.
 6. All database and storage access goes through `src/services/api.ts`.
 7. Guests must never see another guest's photos or jobs. Every new table gets
    RLS in the same migration.
-8. Schema changes go in a new file under `supabase/migrations`. Never apply a
-   migration or run SQL that writes unless the owner explicitly says "run".
-   Read-only queries for diagnosis are fine.
-9. The only Supabase project is `ogixhoughibahbxcspph`, and it serves
-   production. Any other Supabase project is off limits.
+8. Schema changes go in a new file under `supabase/migrations`. Apply them to
+   the test project first. On production, never apply a migration or run SQL
+   that writes unless the owner explicitly says "run". Read-only queries are
+   fine on both projects.
+9. There are two Supabase projects, and no other project is in scope.
+   - Production: `kyxbkpfbcudvxooyxmpy` (MagnetimShare Prod, Frankfurt). Only
+     the Vercel Production environment uses it. It holds real event data.
+     Every write, migration or settings change needs the owner's explicit
+     "run".
+   - Test: `ogixhoughibahbxcspph` (Tokyo). Vercel Preview deployments and
+     local runs use it. It holds test data only. Migrations from an open pull
+     request may be applied here without asking.
+
+   Never point a preview or a local run at production, and never copy
+   production data into the test project.
 10. No secrets in the repository: no `.env` files, no service role key, no
     tokens. Only `VITE_` variables reach the browser.
 11. Public screens never mention MemoriaShare. The brand is MagnetimShare.
@@ -95,4 +105,4 @@ use it as a gate.
 ## Running locally
 
 `npm run dev` starts the app on port 8080. It needs `VITE_SUPABASE_URL` and
-`VITE_SUPABASE_ANON_KEY` in the environment.
+`VITE_SUPABASE_ANON_KEY` of the test project in the environment.
