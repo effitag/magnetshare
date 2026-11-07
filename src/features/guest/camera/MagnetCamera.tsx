@@ -86,7 +86,7 @@ export function MagnetCamera({
   onPrinted,
   onRefreshJobs,
 }: Props) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const videoTrackRef = useRef<MediaStreamTrack | null>(null);
@@ -242,7 +242,7 @@ export function MagnetCamera({
     }
   }
 
-  function tracksAreLive(stream: MediaStream | null): stream is MediaStream {
+  function tracksAreLive(stream: MediaStream | null): boolean {
     const tracks = stream?.getVideoTracks() ?? [];
     return tracks.length > 0 && tracks.every((track) => track.readyState === "live");
   }
@@ -269,7 +269,7 @@ export function MagnetCamera({
     if (!video) return;
 
     const existing = streamRef.current;
-    if (tracksAreLive(existing)) {
+    if (existing && tracksAreLive(existing)) {
       videoTrackRef.current = existing.getVideoTracks()[0] ?? null;
       await attach(video, existing);
       setLoading(false);
