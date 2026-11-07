@@ -2,15 +2,16 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { createEvent, getAdminEvent, saveEventCover, updateEventDetails, type AdminEventDetail } from "@/services/api";
 import { EventForm, type EventFormValue } from "./EventForm";
+import { FrameSection } from "./frames/FrameSection";
 import { EventShare } from "./EventShare";
 
-const empty: EventFormValue = { title: "", eventDate: "", printQuota: 2 };
+const empty: EventFormValue = { title: "", eventDate: "", printQuota: 2, eventType: null };
 
 export function EventEditorPage() {
   const { eventId } = useParams();
   const navigate = useNavigate();
   const [form, setForm] = useState<EventFormValue>(empty);
-  const [saved, setSaved] = useState<Pick<AdminEventDetail, "id" | "slug" | "title"> | null>(null);
+  const [saved, setSaved] = useState<AdminEventDetail | null>(null);
   const [cover, setCover] = useState<File | null>(null);
   const [coverName, setCoverName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -22,8 +23,8 @@ export function EventEditorPage() {
     getAdminEvent(eventId)
       .then((event) => {
         if (cancelled) return;
-        setForm({ title: event.title, eventDate: event.eventDate ?? "", printQuota: event.printQuota });
-        setSaved({ id: event.id, slug: event.slug, title: event.title });
+        setForm({ title: event.title, eventDate: event.eventDate ?? "", printQuota: event.printQuota, eventType: event.eventType });
+        setSaved(event);
         setCoverName(event.coverPath);
       })
       .catch((cause: Error) => {
@@ -36,6 +37,7 @@ export function EventEditorPage() {
 
   function invalid(): string | null {
     if (!form.title.trim()) return "הזינו שם לאירוע.";
+    if (!form.eventType) return "בחרו סוג אירוע.";
     if (!form.eventDate) return "בחרו תאריך.";
     if (!Number.isInteger(form.printQuota) || form.printQuota < 1) return "לכל אורח מגיע לפחות מגנט אחד.";
     return null;
@@ -81,6 +83,11 @@ export function EventEditorPage() {
           onSubmit={() => void save()}
         />
       </div>
+      {saved ? (
+        <FrameSection
+          event={{ id: saved.id, title: saved.title, eventDate: saved.eventDate, eventType: saved.eventType, status: saved.status }}
+        />
+      ) : null}
       {saved ? <EventShare eventId={saved.id} slug={saved.slug} title={saved.title} /> : null}
     </section>
   );

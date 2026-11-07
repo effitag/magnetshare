@@ -1,8 +1,8 @@
-// Studio home (/admin/studio): the frame templates shared by all admins.
+// Studio home (/admin/frames): the frame templates shared by all admins.
+// An event's own frame is chosen and replaced on the event's page, not here.
 import { useState } from 'react';
 import Button from '@/features/studio/ui/Button';
 import { ConfirmDialog, NameDialog } from '@/features/studio/ui/Dialog';
-import EventAssignDialog from './EventAssignDialog';
 import LibraryActions from './LibraryActions';
 import NewTemplateDialog from './NewTemplateDialog';
 import TagFilter from './TagFilter';
@@ -11,7 +11,8 @@ import { useLibrary } from './useLibrary';
 
 export default function LibraryScreen({ repo, onOpen }) {
   const library = useLibrary(repo, onOpen);
-  const { items, loadError, refresh } = library;
+  const { loadError, refresh } = library;
+  const items = library.items?.filter((item) => item.isTemplate) ?? null;
   const [dialog, setDialog] = useState(null); // { kind: 'new' | 'rename' | 'delete', item? }
   const [tag, setTag] = useState(null); // show only templates with this event tag
   const close = () => setDialog(null);
@@ -52,31 +53,12 @@ export default function LibraryScreen({ repo, onOpen }) {
               onOpen={() => onOpen(item.id)}
               onRename={() => setDialog({ kind: 'rename', item })}
               onDelete={() => setDialog({ kind: 'delete', item })}
-              onDuplicate={item.isTemplate ? () => setDialog({ kind: 'for-event', mode: 'copy', item }) : null}
-              onAssign={item.isTemplate ? null : () => setDialog({ kind: 'for-event', mode: 'assign', item })}
-              onPublish={item.isTemplate ? null : () => library.publish(item)}
-              onUnpublish={item.isTemplate || !item.isPublished ? null : () => library.unpublish(item)}
-              isPublished={item.isPublished}
             />
           ))}
         </div>
       )}
 
       {dialog?.kind === 'new' && <NewTemplateDialog onSubmit={library.create} onClose={close} />}
-      {dialog?.kind === 'for-event' && (
-        <EventAssignDialog
-          title={dialog.mode === 'copy' ? 'מסגרת לאירוע' : 'שיוך לאירוע'}
-          mode={dialog.mode}
-          size={dialog.item.size}
-          onClose={close}
-          onSubmit={async ({ eventId, slot, both }) => {
-            const ok = dialog.mode === 'copy'
-              ? await library.duplicateForEvent(dialog.item, eventId, { slot, both })
-              : await library.assignToEvent(dialog.item, eventId, slot);
-            if (ok) close();
-          }}
-        />
-      )}
       {dialog?.kind === 'rename' && (
         <NameDialog
           title="שינוי שם"

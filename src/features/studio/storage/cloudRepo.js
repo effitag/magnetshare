@@ -84,13 +84,20 @@ export function createCloudRepo(gateway) {
       return { id: created.id, doc, revision: created.revision };
     },
 
-    /** Adds an existing document. Library rows are templates; an event frame is a copy. */
-    async insert(doc, { isTemplate = true } = {}) {
+    /**
+     * Adds an existing document. Library rows are templates; an event frame is a copy
+     * that records its event and the template it came from.
+     * @param {object} doc
+     * @param {{ isTemplate?: boolean, eventId?: string | null, sourceTemplateId?: string | null }} [options]
+     */
+    async insert(doc, { isTemplate = true, eventId = null, sourceTemplateId = null } = {}) {
       const { revision } = await gateway.insertTemplate({
         id: doc.id,
         name: doc.name,
         doc,
         is_template: isTemplate,
+        event_id: eventId,
+        source_template_id: sourceTemplateId,
         ...frameColumns(doc),
       });
       return { id: doc.id, revision };
