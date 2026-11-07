@@ -1,4 +1,5 @@
 import { AppError, toAppError } from "@/lib/errors";
+import { isEventType, type EventType } from "@/lib/eventTypes";
 import { countMagnetsLeft, slotForSize, type FrameSlot } from "@/lib/magnets";
 import { supabase } from "@/lib/supabase";
 import { isFrameObjectPath } from "@/features/studio/storage/paths";
@@ -135,6 +136,9 @@ export const frameGateway = {
         window_h: row.window_h,
         is_template: row.is_template !== false,
         is_published: false,
+        // An event frame records its event and the template it was copied from.
+        ...(row.event_id ? { event_id: row.event_id } : {}),
+        ...(row.source_template_id ? { source_template_id: row.source_template_id } : {}),
       })
       .select("revision")
       .single();
@@ -244,13 +248,20 @@ export type AdminEventDetail = {
   eventDate: string | null;
   printQuota: number;
   coverPath: string | null;
+  eventType: EventType | null;
 };
 
 export type EventDraft = {
   title: string;
   eventDate: string;
   printQuota: number;
+  /** Left out: the kind of event is not changed. */
+  eventType?: EventType | null;
 };
+
+function eventTypeColumn(draft: EventDraft): { event_type?: EventType | null } {
+  return draft.eventType === undefined ? {} : { event_type: draft.eventType };
+}
 
 export async function listAdminEvents(): Promise<AdminEventRow[]> {
   const columns = "id, title, status, frame_id, frame_portrait_id";
@@ -328,12 +339,17 @@ export async function setEventLiveSwitch(eventId: string, live: boolean): Promis
   }
 }
 
+function readEventType(row: { event_type?: unknown }): EventType | null {
+  return isEventType(row.event_type) ? row.event_type : null;
+}
+
 export async function getAdminEvent(id: string): Promise<AdminEventDetail> {
-  const { data, error } = await supabase
-    .from("events")
-    .select("id, slug, title, event_date, print_quota, cover_path")
-    .eq("id", id)
-    .single();
+  const columns = "id, slug, title, event_date, print_quota, cover_path";
+  const first = await supabase.from("events").select(`${columns}, event_type`).eq("id", id).single();
+  // Until the event_type migration runs, read the event without it.
+  const { data, error } = first.error && missingColumn(first.error, "event_type")
+    ? await supabase.from("events").select(columns).eq("id", id).single()
+    : first;
   if (error) throw toAppError(error, "לא הצלחנו לפתוח את האירוע.");
   return {
     id: data.id as string,
@@ -342,6 +358,7 @@ export async function getAdminEvent(id: string): Promise<AdminEventDetail> {
     eventDate: (data.event_date as string | null) ?? null,
     printQuota: data.print_quota as number,
     coverPath: (data.cover_path as string | null) ?? null,
+    eventType: readEventType(data as { event_type?: unknown }),
   };
 }
 
@@ -355,6 +372,7 @@ async function insertEvent(draft: EventDraft, slug: string): Promise<AdminEventD
       print_quota: draft.printQuota,
       status: "draft",
       frame_id: null,
+      ...eventTypeColumn(draft),
     })
     .select("id, slug, title")
     .single();
@@ -369,6 +387,7 @@ async function insertEvent(draft: EventDraft, slug: string): Promise<AdminEventD
     eventDate: draft.eventDate,
     printQuota: draft.printQuota,
     coverPath: null,
+    eventType: draft.eventType ?? null,
   };
 }
 
@@ -391,12 +410,13 @@ export async function updateEventDetails(eventId: string, draft: EventDraft): Pr
       title: draft.title.trim(),
       event_date: draft.eventDate,
       print_quota: draft.printQuota,
+      ...eventTypeColumn(draft),
     })
     .eq("id", eventId)
     .select("id, slug, title, cover_path")
     .single();
   if (error) throw toAppError(error, "לא הצלחנו לשמור את האירוע.");
-  return {
+  const saved = {
     id: data.id as string,
     slug: data.slug as string,
     title: data.title as string,
@@ -404,6 +424,8 @@ export async function updateEventDetails(eventId: string, draft: EventDraft): Pr
     printQuota: draft.printQuota,
     coverPath: (data.cover_path as string | null) ?? null,
   };
+  if (draft.eventType !== undefined) return { ...saved, eventType: draft.eventType };
+  return { ...saved, eventType: (await getAdminEvent(eventId)).eventType };
 }
 
 export async function saveEventCover(eventId: string, file: File): Promise<string> {
@@ -491,6 +513,58 @@ export async function assignFrameToEvent(frameId: string, eventId: string, slot:
     }
     throw toAppError(update.error, "לא הצלחנו לשייך את המסגרת לאירוע.");
   }
+}
+
+const ATTACH_ERRORS: Record<string, string> = {
+  not_admin: "רק מנהלים יכולים לבחור מסגרת לאירוע.",
+  invalid_slot: "בחרו מסגרת לרוחב או לאורך.",
+  frame_not_found: "המסגרת לא נמצאה. נסו לבחור שוב.",
+  event_frame_is_template: "זו תבנית. בחרו אותה מהגלריה של האירוע.",
+  frame_of_other_event: "המסגרת הזו שייכת לאירוע אחר.",
+  frame_wrong_orientation: "כיוון המסגרת לא מתאים למקום שנבחר.",
+  frame_files_missing: "המסגרת עוד לא מוכנה לאורחים. נסו שוב.",
+  event_not_found: "האירוע לא נמצא.",
+  frame_in_use: "עם המסגרת הזו כבר נשלחו מגנטים, אז היא לא משתנה. כל שינוי יוצר עותק חדש.",
+};
+
+/**
+ * Puts a ready event frame (its overlay and screen files already uploaded) into
+ * the event's landscape or portrait slot. It is ready for guests at once.
+ * With moveQueued, the event's magnets that are still waiting to be printed
+ * move from the old frame to this one. Returns how many moved.
+ */
+export async function attachEventFrame(
+  eventId: string,
+  slot: FrameSlot,
+  frameId: string,
+  { moveQueued = false }: { moveQueued?: boolean } = {},
+): Promise<number> {
+  const { data, error } = await supabase.rpc("attach_event_frame", {
+    p_event_id: eventId,
+    p_slot: slot,
+    p_frame_id: frameId,
+    p_move_queued: moveQueued,
+  });
+  if (error) {
+    const message = error.message ?? "";
+    for (const [code, hebrew] of Object.entries(ATTACH_ERRORS)) {
+      if (message.includes(code)) throw new AppError(hebrew);
+    }
+    throw toAppError(error, "לא הצלחנו לחבר את המסגרת לאירוע. נסו שוב.");
+  }
+  return Number(data ?? 0);
+}
+
+/** Magnets of this event, sent with this frame, that are still waiting to be printed. */
+export async function countQueuedJobs(eventId: string, frameId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("print_jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", eventId)
+    .eq("frame_id", frameId)
+    .eq("status", "queued");
+  if (error) throw toAppError(error, "לא הצלחנו לבדוק את המגנטים בתור.");
+  return count ?? 0;
 }
 
 export async function ensureGuestSession(): Promise<string> {
