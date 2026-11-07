@@ -1,5 +1,6 @@
 // The template.json format. See README.md for the field-by-field description.
 import { DEFAULT_FONT } from '@/features/studio/fonts/registry';
+import { autoBind } from './eventBinding';
 
 export const FORMAT = 'magnet-frame-studio';
 export const VERSION = 1;
@@ -137,7 +138,8 @@ export function migrateTemplate(raw) {
     size: { ...DEFAULT_SIZE, ...raw.size },
     event: { ...DEFAULT_EVENT, ...raw.event },
     // Exactly one background, always the bottom layer.
-    elements: [{ ...createBackground(), ...background }, ...elements.filter((el) => el.type !== 'background')],
+    // Older templates get their "שמות" and "תאריך" texts linked to the event (see eventBinding.js).
+    elements: [{ ...createBackground(), ...background }, ...elements.filter((el) => el.type !== 'background').map(autoBind)],
     preview: raw.preview ? { ...DEFAULT_PREVIEW, ...raw.preview } : null,
   };
 }

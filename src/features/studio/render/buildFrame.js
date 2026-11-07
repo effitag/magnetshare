@@ -4,6 +4,7 @@
 import Konva from 'konva';
 import { coverCrop, frameBoxes, ptToMm } from '@/features/studio/model/units';
 import { detectDirection } from '@/features/studio/model/text';
+import { fitFontSize, isBound } from '@/features/studio/model/eventBinding';
 import { normalizeSymbols, withSymbols } from '@/features/studio/fonts/textSymbols';
 import { boundToBox, boxAttrs, U } from './nodeBox';
 import { buildPhotoArea } from './photoArea';
@@ -83,12 +84,13 @@ function buildIcon(el) {
 
 function buildText(el) {
   const text = normalizeSymbols(el.text);
+  const fontSize = ptToMm(el.sizePt) * U;
   const node = new Konva.Text({
     text,
     // Hearts, rings and sparkles in the text come from the symbols font, in the text's colour.
     fontFamily: withSymbols(el.font),
     fontStyle: String(el.weight ?? 400),
-    fontSize: ptToMm(el.sizePt) * U,
+    fontSize,
     lineHeight: el.lineHeight ?? 1.2,
     fill: el.color,
     align: el.align ?? 'center',
@@ -96,6 +98,12 @@ function buildText(el) {
     width: el.width * U,
     wrap: 'word',
   });
+  if (isBound(el)) {
+    // A linked name or date stays on one line: a long name shrinks to fit instead of wrapping.
+    // measureSize gives the whole line's width; with wrap 'none' Konva would cut it at the box edge.
+    node.wrap('none');
+    node.fontSize(fitFontSize(fontSize, node.measureSize(text).width, el.width * U));
+  }
   // Height follows the content: measure, then position around the centre like every other element.
   node.setAttrs(boxAttrs(el, node.height() / U));
   node.height(undefined);

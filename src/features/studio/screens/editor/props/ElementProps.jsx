@@ -5,6 +5,7 @@ import Icon from '@/features/studio/ui/icons';
 import { nearestWeight, getFont, WEIGHT_LABELS } from '@/features/studio/fonts/registry';
 import { normalizeSymbols } from '@/features/studio/fonts/textSymbols';
 import { normalizeDeg, roundMm } from '@/features/studio/model/units';
+import { BINDINGS, DATE_FORMATS, DEFAULT_DATE_FORMAT, SAMPLE_DATE, formatEventDate, isBound } from '@/features/studio/model/eventBinding';
 import { useEditor } from '@/features/studio/store/editorStore';
 import FontPicker from '../FontPicker';
 import SymbolBar from './SymbolBar';
@@ -60,6 +61,38 @@ const ALIGN_OPTIONS = [
   { value: 'left', label: 'יישור לשמאל', icon: <Icon name="alignLeft" className="size-4" /> },
 ];
 
+const LINK_OPTIONS = [{ value: '', label: 'לא מקושר · טקסט חופשי' }, ...BINDINGS.map((b) => ({ value: b.id, label: b.label }))];
+
+/** Link a text to the event's name or date, or unlink it for free text. */
+function EventLinkProps({ el, update }) {
+  const bind = isBound(el) ? el.bind : '';
+  const setLink = (value) => {
+    if (!value) return update({ bind: null }, 'bind');
+    if (value === 'names') return update({ bind: 'names' }, 'bind');
+    const dateFormat = el.dateFormat ?? DEFAULT_DATE_FORMAT;
+    return update({ bind: 'date', dateFormat, text: formatEventDate(SAMPLE_DATE, dateFormat) }, 'bind');
+  };
+  const setFormat = (dateFormat) => update({ dateFormat, text: formatEventDate(SAMPLE_DATE, dateFormat) }, 'dateFormat');
+  return (
+    <>
+      <SelectField label="קישור לאירוע" value={bind} onChange={setLink} options={LINK_OPTIONS} />
+      {bind === 'date' && (
+        <SelectField
+          label="פורמט תאריך"
+          value={el.dateFormat ?? DEFAULT_DATE_FORMAT}
+          onChange={setFormat}
+          options={DATE_FORMATS.map((f) => ({ value: f.id, label: f.id === 'hebrew' ? `${f.label} · ${formatEventDate(SAMPLE_DATE, 'hebrew')}` : f.label }))}
+        />
+      )}
+      {bind && (
+        <p className="text-xs text-muted-foreground">
+          {bind === 'names' ? 'בכל אירוע יופיע כאן שם האירוע.' : 'בכל אירוע יופיע כאן תאריך האירוע.'} התוכן כאן הוא דוגמה. שם ארוך מוקטן כדי להיכנס בשורה אחת.
+        </p>
+      )}
+    </>
+  );
+}
+
 export function TextProps({ el }) {
   const update = useUpdate(el);
   const weights = getFont(el.font)?.weights ?? [400, 700];
@@ -67,7 +100,8 @@ export function TextProps({ el }) {
   const setText = (text) => update({ text: normalizeSymbols(text) }, 'text');
   return (
     <Section title="טקסט">
-      <TextAreaField label="תוכן" value={el.text} onChange={setText} inputRef={textRef} />
+      <EventLinkProps el={el} update={update} />
+      <TextAreaField label={isBound(el) ? 'תוכן לדוגמה' : 'תוכן'} value={el.text} onChange={setText} inputRef={textRef} />
       <SymbolBar textRef={textRef} value={el.text} onInsert={setText} />
       <FontPicker value={el.font} onChange={(font) => update({ font, weight: nearestWeight(font, el.weight ?? 400) }, 'font')} />
       <div className="grid grid-cols-1 gap-3">
