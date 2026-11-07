@@ -32,7 +32,23 @@ function missingColumn(error: { message?: string } | null, name: string): boolea
   return message.includes(name);
 }
 
+/** True while the database does not have the function yet (only between a deploy and its migration). */
+export function missingFunction(error: { code?: string } | null): boolean {
+  return error?.code === "PGRST202";
+}
+
 export async function getEventCardBySlug(slug: string): Promise<EventCard | null> {
+  try {
+    const card = await supabase.rpc("get_event_card", { p_slug: slug }).maybeSingle();
+    if (!card.error) return (card.data as EventCard | null) ?? null;
+    if (!missingFunction(card.error)) throw card.error;
+    return await getEventCardFromView(slug);
+  } catch (error) {
+    throw toAppError(error, "לא הצלחנו לפתוח את האירוע. בדקו את הקישור ונסו שוב.");
+  }
+}
+
+async function getEventCardFromView(slug: string): Promise<EventCard | null> {
   try {
     const first = await supabase.from("event_cards").select(EVENT_CARD_COLUMNS).eq("slug", slug).maybeSingle();
     if (first.error && (missingColumn(first.error, "frame_portrait_id") || missingColumn(first.error, "screen_path_portrait"))) {
@@ -535,6 +551,9 @@ function mapPrintError(error: unknown): AppError {
 
 export async function getPublishedFrameWindow(id: string): Promise<PublishedFrameWindow | null> {
   try {
+    const frame = await supabase.rpc("get_frame_window", { p_id: id }).maybeSingle();
+    if (!frame.error) return (frame.data as PublishedFrameWindow | null) ?? null;
+    if (!missingFunction(frame.error)) throw frame.error;
     const { data, error } = await supabase
       .from("frames")
       .select("id, width_mm, height_mm, window_x, window_y, window_w, window_h")
