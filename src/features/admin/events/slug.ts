@@ -16,6 +16,28 @@ export function suggestSlug(title: string, suffix = randomSuffix()): string {
   return `${body}${suffix}`.slice(0, 16);
 }
 
-export function guestEventUrl(slug: string): string {
-  return `https://www.magnetimshare.com/e/${slug}`;
+const PRODUCTION_SITE = "https://www.magnetimshare.com";
+
+/**
+ * The site guests should open, from the address the admin is on. Production always
+ * links to www.magnetimshare.com; a preview or a local run links to itself, so its
+ * QR opens the event in the same (test) project the event was created in.
+ */
+export function guestSite(origin: string): string {
+  try {
+    const url = new URL(origin);
+    if (url.hostname === "magnetimshare.com" || url.hostname.endsWith(".magnetimshare.com")) return PRODUCTION_SITE;
+    return url.origin;
+  } catch {
+    return PRODUCTION_SITE;
+  }
+}
+
+function currentOrigin(): string {
+  return typeof window === "undefined" ? PRODUCTION_SITE : window.location.origin;
+}
+
+/** The guest link (and QR) of an event, on the site the admin is using. */
+export function guestEventUrl(slug: string, origin: string = currentOrigin()): string {
+  return `${guestSite(origin)}/e/${slug}`;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { randomSuffix, suggestSlug } from "./slug";
+import { guestEventUrl, guestSite, randomSuffix, suggestSlug } from "./slug";
 
 describe("event links", () => {
   it("ends every new link with ten random letters or digits", () => {
@@ -19,5 +19,22 @@ describe("event links", () => {
     for (let i = 0; i < 50; i += 1) {
       expect(suggestSlug("רון ♥ מאיה")).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
     }
+  });
+});
+
+describe("guest link", () => {
+  it("always uses the production domain in production", () => {
+    expect(guestEventUrl("eventabc", "https://www.magnetimshare.com")).toBe("https://www.magnetimshare.com/e/eventabc");
+    expect(guestEventUrl("eventabc", "https://magnetimshare.com")).toBe("https://www.magnetimshare.com/e/eventabc");
+  });
+
+  it("stays on the preview or local address the admin is on", () => {
+    const preview = "https://magnetshare-git-claude-magnetimshare-p-dc6030-effitags-projects.vercel.app";
+    expect(guestEventUrl("eventabc", preview)).toBe(`${preview}/e/eventabc`);
+    expect(guestEventUrl("eventabc", "http://localhost:8080")).toBe("http://localhost:8080/e/eventabc");
+  });
+
+  it("falls back to production when the address cannot be read", () => {
+    expect(guestSite("not a url")).toBe("https://www.magnetimshare.com");
   });
 });
