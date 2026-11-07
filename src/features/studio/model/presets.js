@@ -7,6 +7,7 @@
 // and date, a transparent photo window, and text kept inside the safe area so cutting can't clip it.
 import { half, photoArea, rect, text } from './layoutKit';
 import { createBackground, createTemplateDoc } from './schema';
+import { autoBind } from './eventBinding';
 import { STARTER_CATEGORIES, STARTERS } from './starters';
 
 export const SIZE_PRESETS = [
@@ -106,7 +107,8 @@ export function createPresetDoc(name, { sizeId, orientation, layoutId } = DEFAUL
   const background = { ...createBackground(), fill: starter?.background ?? '#FFFFFF' };
   const tags = starter ? [STARTER_CATEGORIES.find((c) => c.id === starter.category).label] : [];
   tags.push(`size:${sizeId}`, `layout:${layoutId}`, `orient:${orientation}`);
-  return { ...doc, size, tags, elements: [background, ...build(size)] };
+  // New templates link their "שמות" and "תאריך" texts to the event from the start.
+  return { ...doc, size, tags, elements: [background, ...build(size).map(autoBind)] };
 }
 
 export function visibleTags(tags = []) {
