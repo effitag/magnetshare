@@ -69,10 +69,12 @@ export type EventCard = {
   event_date: string | null;
   place: string | null;
   frame_id: string | null;
+  frame_portrait_id: string | null;
   print_quota: number;
   status: "live" | "closed";
   cover_path: string | null;
   screen_path: string | null;
+  screen_path_portrait: string | null;
 };
 
 export type GuestPhoto = {
@@ -93,4 +95,6 @@ export type PrintJob = {
   copies: number;
   status: PrintJobStatus;
   created_at: string;
+  frame_id: string | null;
+  storage_path: string | null;
 };

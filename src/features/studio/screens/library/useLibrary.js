@@ -97,21 +97,25 @@ export function useLibrary(repo, onOpen) {
     setBusy(null);
   }
 
-  async function duplicateForEvent(item, eventId) {
-    let created;
+  async function duplicateForEvent(item, eventId, choice) {
+    const orientations = choice?.both ? ['landscape', 'portrait'] : [choice?.slot || 'landscape'];
+    let first;
     const ok = await attempt(async () => {
-      created = await repo.duplicateForEvent(item.id);
       const { assignFrameToEvent } = await import('@/services/api');
-      await assignFrameToEvent(created.id, eventId);
+      for (const slot of orientations) {
+        const created = await repo.duplicateForEvent(item.id, slot);
+        await assignFrameToEvent(created.id, eventId, slot);
+        first ??= created;
+      }
     }, 'לא הצלחנו ליצור מסגרת לאירוע.');
-    if (ok) onOpen(created.id);
+    if (ok && first) onOpen(first.id);
     return ok;
   }
 
-  async function assignToEvent(item, eventId) {
+  async function assignToEvent(item, eventId, slot) {
     const ok = await attempt(async () => {
       const { assignFrameToEvent } = await import('@/services/api');
-      await assignFrameToEvent(item.id, eventId);
+      await assignFrameToEvent(item.id, eventId, slot);
     }, 'לא הצלחנו לשייך את המסגרת לאירוע.');
     if (ok) notify('המסגרת שויכה לאירוע.', 'info');
     return ok;

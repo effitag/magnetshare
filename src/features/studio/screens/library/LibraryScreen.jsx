@@ -66,11 +66,13 @@ export default function LibraryScreen({ repo, onOpen }) {
       {dialog?.kind === 'for-event' && (
         <EventAssignDialog
           title={dialog.mode === 'copy' ? 'מסגרת לאירוע' : 'שיוך לאירוע'}
+          mode={dialog.mode}
+          size={dialog.item.size}
           onClose={close}
-          onSubmit={async (eventId) => {
+          onSubmit={async ({ eventId, slot, both }) => {
             const ok = dialog.mode === 'copy'
-              ? await library.duplicateForEvent(dialog.item, eventId)
-              : await library.assignToEvent(dialog.item, eventId);
+              ? await library.duplicateForEvent(dialog.item, eventId, { slot, both })
+              : await library.assignToEvent(dialog.item, eventId, slot);
             if (ok) close();
           }}
         />

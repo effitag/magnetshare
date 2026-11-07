@@ -24,8 +24,8 @@ const TableCardPage = lazy(() =>
   import("@/features/admin/events/TableCardPage").then((module) => ({ default: module.TableCardPage })),
 );
 const GuestPage = lazy(() => import("@/features/guest/GuestPage").then((module) => ({ default: module.GuestPage })));
-const CameraSoonPage = lazy(() =>
-  import("@/features/guest/CameraSoonPage").then((module) => ({ default: module.CameraSoonPage })),
+const CameraPage = lazy(() =>
+  import("@/features/guest/camera/CameraPage").then((module) => ({ default: module.CameraPage })),
 );
 
 export function App() {
@@ -54,7 +54,7 @@ export function App() {
             path="/e/:slug/camera"
             element={
               <Suspense fallback={<LoadingScreen />}>
-                <CameraSoonPage />
+                <CameraPage />
               </Suspense>
             }
           />

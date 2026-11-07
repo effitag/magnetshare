@@ -105,5 +105,60 @@ export function createPresetDoc(name, { sizeId, orientation, layoutId } = DEFAUL
   const build = starter?.build ?? LAYOUT_BUILDERS[layoutId] ?? LAYOUT_BUILDERS.blank;
   const background = { ...createBackground(), fill: starter?.background ?? '#FFFFFF' };
   const tags = starter ? [STARTER_CATEGORIES.find((c) => c.id === starter.category).label] : [];
+  tags.push(`size:${sizeId}`, `layout:${layoutId}`, `orient:${orientation}`);
   return { ...doc, size, tags, elements: [background, ...build(size)] };
+}
+
+export function visibleTags(tags = []) {
+  return (tags ?? []).filter((tag) => !/^(size|layout|orient):/.test(String(tag)));
+}
+
+function tagValue(tags, prefix) {
+  const found = (tags ?? []).find((tag) => String(tag).startsWith(prefix));
+  return found ? String(found).slice(prefix.length) : null;
+}
+
+export function frameOrientation(widthMm, heightMm) {
+  return Number(widthMm) > Number(heightMm) ? 'landscape' : 'portrait';
+}
+
+/** Swap the axes when an older template has no saved layout to rebuild from. */
+export function transposeDoc(doc) {
+  const next = structuredClone(doc);
+  const width = Number(next.size?.widthMm) || 1;
+  const height = Number(next.size?.heightMm) || 1;
+  next.size = { ...next.size, widthMm: height, heightMm: width };
+  next.elements = (next.elements ?? []).map((element) => {
+    if (element.x == null || element.y == null) return element;
+    const moved = { ...element, x: element.y, y: element.x };
+    if (element.width != null && element.height != null) {
+      moved.width = element.height;
+      moved.height = element.width;
+    }
+    return moved;
+  });
+  next.tags = [
+    ...visibleTags(next.tags),
+    ...(tagValue(doc.tags, 'size:') ? [`size:${tagValue(doc.tags, 'size:')}`] : []),
+    ...(tagValue(doc.tags, 'layout:') ? [`layout:${tagValue(doc.tags, 'layout:')}`] : []),
+    `orient:${frameOrientation(next.size.widthMm, next.size.heightMm)}`,
+  ];
+  return next;
+}
+
+/**
+ * A copy aimed at one slot. Tagged templates rebuild from their layout.
+ * A square stays square. Anything else without tags is transposed.
+ */
+export function docForOrientation(doc, orientation) {
+  const width = Number(doc.size?.widthMm) || 0;
+  const height = Number(doc.size?.heightMm) || 0;
+  if (width === height || frameOrientation(width, height) === orientation) return structuredClone(doc);
+  const sizeId = tagValue(doc.tags, 'size:');
+  const layoutId = tagValue(doc.tags, 'layout:');
+  if (sizeId && layoutId) {
+    const built = createPresetDoc(doc.name, { sizeId, orientation, layoutId });
+    return { ...built, name: doc.name, id: doc.id };
+  }
+  return transposeDoc(doc);
 }

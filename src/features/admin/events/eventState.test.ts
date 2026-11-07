@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canGoLive, eventPhase, phaseLabel } from "./eventState";
+import { canGoLive, eventPhase, phaseLabel, slotState } from "./eventState";
 import { suggestSlug } from "./slug";
 
 describe("event phase", () => {
@@ -11,10 +11,15 @@ describe("event phase", () => {
     expect(phaseLabel[eventPhase({ status: "closed", frameId: "f", framePublished: true })]).toBe("הסתיים");
   });
 
-  it("blocks going live until a frame is published", () => {
+  it("goes live with either published slot, and blocks a half-published pair", () => {
     expect(canGoLive({ frameId: null, framePublished: false })).toBe(false);
     expect(canGoLive({ frameId: "f", framePublished: false })).toBe(false);
     expect(canGoLive({ frameId: "f", framePublished: true })).toBe(true);
+    expect(canGoLive({ frameId: null, framePublished: false, portraitId: "p", portraitPublished: true })).toBe(true);
+    expect(canGoLive({ frameId: "f", framePublished: true, portraitId: "p", portraitPublished: false })).toBe(false);
+    expect(slotState(null, false)).toBe("אין");
+    expect(slotState("f", false)).toBe("לא פורסמה");
+    expect(slotState("f", true)).toBe("פורסמה");
   });
 
   it("hides the slug and keeps it short", () => {

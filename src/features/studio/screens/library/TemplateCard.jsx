@@ -1,3 +1,4 @@
+import { visibleTags } from '@/features/studio/model/presets';
 import { IconButton } from '@/features/studio/ui/Button';
 import Icon from '@/features/studio/ui/icons';
 
@@ -9,6 +10,7 @@ function sizeLabel({ widthMm, heightMm }) {
 
 export default function TemplateCard({ item, onOpen, onRename, onDelete, onDuplicate, onAssign, onPublish, onUnpublish, isPublished }) {
   const { name, updatedAt, size, tags, thumbnailUrl } = item;
+  const shown = visibleTags(tags);
   const edited = updatedAt ? dateFormat.format(new Date(updatedAt)) : '';
   return (
     <article className="group flex flex-col rounded-xl border border-border bg-background overflow-hidden hover:border-cool-600 transition-colors">
@@ -27,7 +29,7 @@ export default function TemplateCard({ item, onOpen, onRename, onDelete, onDupli
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-semibold">{name}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {tags?.length > 0 && <span className="text-brand">{tags.join(' · ')} · </span>}
+            {shown.length > 0 && <span className="text-brand">{shown.join(' · ')} · </span>}
             נערך {edited}
           </p>
         </div>

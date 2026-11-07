@@ -1,7 +1,7 @@
 // The studio's templates in the cloud. Same jobs the local-folder version had:
 // list, create, load, save, rename, delete, images and thumbnails.
 import { DEFAULT_SIZE, migrateTemplate } from '@/features/studio/model/schema';
-import { createPresetDoc, DEFAULT_PRESET } from '@/features/studio/model/presets';
+import { createPresetDoc, DEFAULT_PRESET, docForOrientation } from '@/features/studio/model/presets';
 import { ConflictError, NotFoundError, UnsupportedImageError } from './errors';
 import { frameFolder, frameObjectPath, imageTypeOf, OVERLAY_FILE, PREVIEW_FILE, SCREEN_FILE } from './paths';
 
@@ -96,9 +96,10 @@ export function createCloudRepo(gateway) {
       return { id: doc.id, revision };
     },
 
-    async duplicateForEvent(id) {
+    async duplicateForEvent(id, orientation) {
       const { doc } = await repo.load(id);
-      const copy = { ...structuredClone(doc), id: crypto.randomUUID(), name: doc.name };
+      const shaped = orientation ? docForOrientation(doc, orientation) : structuredClone(doc);
+      const copy = { ...structuredClone(shaped), id: crypto.randomUUID(), name: doc.name };
       return repo.insert(copy, { isTemplate: false });
     },
 
