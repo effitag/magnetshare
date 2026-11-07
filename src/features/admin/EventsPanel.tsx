@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { listAdminEvents, setEventLiveSwitch, type AdminEventRow } from "@/services/api";
+import { listAdminEvents, type AdminEventRow } from "@/services/api";
 import { EventList, type EventListItem } from "@/features/admin/EventList";
 
 function toItem(row: AdminEventRow): EventListItem {
@@ -18,26 +18,12 @@ function toItem(row: AdminEventRow): EventListItem {
 export function EventsPanel() {
   const [events, setEvents] = useState<EventListItem[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [pendingId, setPendingId] = useState<string | null>(null);
 
   useEffect(() => {
     listAdminEvents()
       .then((rows) => setEvents(rows.map(toItem)))
       .catch((error: Error) => setMessage(error.message));
   }, []);
-
-  async function toggle(event: EventListItem, live: boolean) {
-    setMessage(null);
-    setPendingId(event.id);
-    try {
-      await setEventLiveSwitch(event.id, live);
-      setEvents((current) => current?.map((row) => (row.id === event.id ? { ...row, status: live ? "live" : "closed" } : row)) ?? current);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "לא הצלחנו לעדכן את האירוע.");
-    } finally {
-      setPendingId(null);
-    }
-  }
 
   return (
     <section className="mx-auto w-full max-w-xl px-4 pt-6">
@@ -48,7 +34,7 @@ export function EventsPanel() {
         </Link>
       </div>
       {events ? (
-        <EventList events={events} message={message} pendingId={pendingId} onToggle={(event, live) => void toggle(event, live)} />
+        <EventList events={events} />
       ) : (
         <p className="mt-6 text-base text-ink">{message ?? "טוענים…"}</p>
       )}

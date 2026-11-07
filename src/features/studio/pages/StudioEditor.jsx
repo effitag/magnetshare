@@ -12,7 +12,9 @@ export default function StudioEditor() {
   const navigate = useNavigate();
   const repo = useStudioRepo();
   const narrow = useNarrow();
-  const close = useCallback(() => navigate('/admin/frames'), [navigate]);
+  // An event frame goes back to its event; a template to the library.
+  const close = useCallback((eventId) => navigate(eventId ? `/admin/events/${eventId}` : '/admin/frames'), [navigate]);
+  const open = useCallback((id) => navigate(`/admin/frames/${id}`), [navigate]);
 
   if (narrow) {
     return (
@@ -24,7 +26,7 @@ export default function StudioEditor() {
 
   return (
     <div className={`bg-paper text-ink ${STUDIO_FONT}`} dir="rtl">
-      <EditorScreen key={templateId} repo={repo} templateId={templateId} onClose={close} />
+      <EditorScreen key={templateId} repo={repo} templateId={templateId} onClose={close} onOpen={open} />
     </div>
   );
 }

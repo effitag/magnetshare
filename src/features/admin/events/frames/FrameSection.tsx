@@ -1,17 +1,21 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { EventType } from "@/lib/eventTypes";
 import type { FrameSlot } from "@/lib/magnets";
 import { countQueuedJobs, getEventFrames, type EventFrames, type EventFrameSlot } from "@/services/api";
-import { chooseFrame, type EventValues, type Template } from "../eventFrames";
+import { chooseFrame, isStale, loadEventFrame, refreshFrame, type EventValues, type Template } from "../eventFrames";
 import { FrameGallery } from "./FrameGallery";
 import { ReplaceDialog } from "./ReplaceDialog";
 
 type Props = {
   event: EventValues & { eventType: EventType | null; status: "draft" | "live" | "closed" };
+  /** Called whenever the event's frames change, so the activation checklist can follow. */
+  onChanged?: (frames: EventFrames) => void;
 };
 
-type Pending = { template: Template; slot: FrameSlot; queued: number };
+type Pending =
+  | { kind: "replace"; template: Template; queued: number }
+  | { kind: "update"; slots: EventFrameSlot[]; queued: number };
 
 const button = "inline-flex min-h-12 items-center justify-center rounded-full border-[3px] border-ink px-4 text-base";
 
@@ -35,51 +39,104 @@ function FrameCard({ frame, title, onReplace }: { frame: EventFrameSlot; title: 
   );
 }
 
-/** The event's frame: choose one from the gallery, replace it, or add an optional portrait frame. */
-export function FrameSection({ event }: Props) {
+function slotsOf(frames: EventFrames | null): EventFrameSlot[] {
+  return [frames?.landscape, frames?.portrait].filter((frame): frame is EventFrameSlot => Boolean(frame));
+}
+
+/** The event's frame: choose one from the gallery, replace it, add an optional portrait frame, and keep it in step with the event's name and date. */
+export function FrameSection({ event, onChanged }: Props) {
   const [frames, setFrames] = useState<EventFrames | null>(null);
+  const [stale, setStale] = useState<EventFrameSlot[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [gallery, setGallery] = useState<FrameSlot | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
-  const [working, setWorking] = useState(false);
+  const [working, setWorking] = useState<string | null>(null);
+  const onChangedRef = useRef(onChanged);
+  onChangedRef.current = onChanged;
 
-  const load = useCallback(() => {
-    getEventFrames(event.id)
-      .then(setFrames)
-      .catch((cause: Error) => setError(cause.message));
-  }, [event.id]);
+  const load = useCallback(async () => {
+    try {
+      const next = await getEventFrames(event.id);
+      setFrames(next);
+      onChangedRef.current?.(next);
+      const out: EventFrameSlot[] = [];
+      for (const frame of slotsOf(next)) {
+        if (isStale(await loadEventFrame(frame.id), event)) out.push(frame);
+      }
+      setStale(out);
+      return out;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "לא הצלחנו לטעון את המסגרת של האירוע.");
+      return [];
+    }
+  }, [event]);
 
-  useEffect(load, [load]);
-
-  async function apply(template: Template, slot: FrameSlot, moveQueued: boolean) {
+  async function run(label: string, action: () => Promise<number>) {
     setPending(null);
     setGallery(null);
-    setWorking(true);
+    setWorking(label);
     setError(null);
     setNotice(null);
     try {
-      const moved = await chooseFrame(template, event, slot, { moveQueued });
+      const moved = await action();
       setNotice(moved > 0 ? `המסגרת מוכנה לאורחים. ${moved === 1 ? "מגנט אחד עודכן" : `${moved} מגנטים עודכנו`} אליה.` : "המסגרת מוכנה לאורחים.");
-      load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "לא הצלחנו להכין את המסגרת. נסו שוב.");
     } finally {
-      setWorking(false);
+      setWorking(null);
+      await load();
     }
+  }
+
+  const choose = (template: Template, moveQueued: boolean) => run("מכינים את המסגרת…", () => chooseFrame(template, event, { moveQueued }));
+
+  const update = (slots: EventFrameSlot[], moveQueued: boolean) =>
+    run("מעדכנים את המסגרת…", async () => {
+      let moved = 0;
+      for (const frame of slots) moved += await refreshFrame(frame.id, frame.sourceTemplateId, event, { moveQueued });
+      return moved;
+    });
+
+  async function queuedIn(slots: EventFrameSlot[]): Promise<number> {
+    let queued = 0;
+    for (const frame of slots) queued += await countQueuedJobs(event.id, frame.id);
+    return queued;
   }
 
   async function pick(template: Template, slot: FrameSlot) {
     const current = slot === "landscape" ? frames?.landscape : frames?.portrait;
-    if (!current) return apply(template, slot, false);
+    if (!current) return choose(template, false);
     try {
-      const queued = await countQueuedJobs(event.id, current.id);
-      if (event.status === "live" || queued > 0) setPending({ template, slot, queued });
-      else await apply(template, slot, false);
+      const queued = await queuedIn([current]);
+      if (event.status === "live" || queued > 0) setPending({ kind: "replace", template, queued });
+      else await choose(template, false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "לא הצלחנו לבדוק את המגנטים בתור.");
     }
   }
+
+  async function askUpdate(slots: EventFrameSlot[]) {
+    try {
+      const queued = await queuedIn(slots);
+      if (event.status === "live" || queued > 0) setPending({ kind: "update", slots, queued });
+      else await update(slots, false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "לא הצלחנו לבדוק את המגנטים בתור.");
+    }
+  }
+
+  // On open, and whenever the saved name or date changes: load, and bring the frame up to date.
+  const seen = useRef<string | null>(null);
+  useEffect(() => {
+    const key = `${event.id}|${event.title}|${event.eventDate ?? ""}`;
+    const first = seen.current === null;
+    if (seen.current === key) return;
+    seen.current = key;
+    void load().then((out) => {
+      if (!first && out.length) void askUpdate(out);
+    });
+  }, [event.id, event.title, event.eventDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const current = gallery === "portrait" ? frames?.portrait : frames?.landscape;
 
@@ -98,6 +155,14 @@ export function FrameSection({ event }: Props) {
         <p className="mt-3 text-base" role="status">
           {notice}
         </p>
+      ) : null}
+      {stale.length && !pending && !working ? (
+        <div className="mt-3 flex flex-col gap-2 rounded-xl border-[3px] border-ink bg-pop-wash p-3">
+          <p className="text-base">השם או התאריך של האירוע השתנו, והמסגרת עוד מציגה את הקודמים.</p>
+          <button type="button" className={`${button} self-start bg-pop`} onClick={() => void askUpdate(stale)}>
+            עדכון המסגרת
+          </button>
+        </div>
       ) : null}
 
       {frames ? (
@@ -133,15 +198,16 @@ export function FrameSection({ event }: Props) {
       ) : null}
       {pending ? (
         <ReplaceDialog
+          kind={pending.kind}
           live={event.status === "live"}
           queued={pending.queued}
-          onReplace={(moveQueued) => void apply(pending.template, pending.slot, moveQueued)}
+          onReplace={(moveQueued) => void (pending.kind === "replace" ? choose(pending.template, moveQueued) : update(pending.slots, moveQueued))}
           onCancel={() => setPending(null)}
         />
       ) : null}
       {working ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-sticker/90 p-4" role="status" aria-live="polite">
-          <p className="font-display text-2xl text-ink">מכינים את המסגרת…</p>
+          <p className="font-display text-2xl text-ink">{working}</p>
         </div>
       ) : null}
     </section>
