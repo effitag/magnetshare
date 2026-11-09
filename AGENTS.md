@@ -77,12 +77,18 @@ that asks for it.
      the Vercel Production environment uses it. It holds real event data.
      Every write, migration or settings change needs the owner's explicit
      "run".
-   - Test: `ogixhoughibahbxcspph` (Tokyo). Vercel Preview deployments and
-     local runs use it. It holds test data only. Migrations from an open pull
-     request may be applied here without asking.
+   - Test: `gexvrhhnmezkugldjjax` (MagnetimShare Lab, Frankfurt). Vercel
+     Preview deployments and local runs use it. It holds test data only.
+     Migrations from an open pull request may be applied here without asking.
+     Before any write, confirm the target ref is `gexvrhhnmezkugldjjax`.
 
    Never point a preview or a local run at production, and never copy
    production data into the test project.
+
+   Lab is in the same Supabase organization as production, so they share the
+   organization's quotas, including Realtime concurrent connections. Never run
+   a load test against Lab while production is active. Any load test needs the
+   owner's separate approval.
 10. No secrets in the repository: no `.env` files, no service role key, no
     tokens. Only `VITE_` variables reach the browser.
 11. Public screens never mention MemoriaShare. The brand is MagnetimShare.
