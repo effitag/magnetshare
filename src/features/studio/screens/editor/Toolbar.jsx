@@ -4,7 +4,8 @@ import Icon from '@/features/studio/ui/icons';
 import { notify } from '@/features/studio/ui/toast';
 import { createImage, createPhotoArea, createShape, createText } from '@/features/studio/model/schema';
 import { sanitizeName, splitExtension } from '@/features/studio/model/names';
-import { renderPrintPng, renderScreenWebp } from '@/features/studio/render/renderToCanvas';
+import { renderPrintPng } from '@/features/studio/render/renderToCanvas';
+import Dialog from '@/features/studio/ui/Dialog';
 import { downloadBlob } from '@/features/studio/storage/backupZip';
 import { useDoc, useEditor } from '@/features/studio/store/editorStore';
 import { useEditorContext } from './EditorContext';
@@ -49,24 +50,47 @@ export default function Toolbar({ status, onClose }) {
     }
   }
 
-  async function publishFrame() {
-    if (ctx.isTemplate) {
-      notify('תבנית לא מתפרסמת לאורחים. צרו ממנה מסגרת לאירוע, ואז פרסמו אותה.');
-      return;
-    }
+  const [ask, setAsk] = useState(null); // { live, queued } before replacing the event's current frame
+
+  // An event frame goes to guests with "שמירה לאירוע": render, then put it into the event's slot.
+  async function finishSaveForEvent(moveQueued) {
+    setAsk(null);
     setExporting(true);
     try {
-      await ctx.repo.publish(ctx.templateId, {
-        overlay: await renderPrintPng(doc, ctx.assets),
-        screen: await renderScreenWebp(doc, ctx.assets),
-      });
-      notify('המסגרת פורסמה. עכשיו אפשר להפעיל את האירוע.');
+      const { saveForEvent } = await import('@/features/admin/events/eventFrames');
+      const moved = await saveForEvent(ctx.templateId, doc, ctx.eventId, { moveQueued });
+      notify(moved > 0 ? `המסגרת נשמרה לאירוע. ${moved} מגנטים שבתור עודכנו אליה.` : 'המסגרת נשמרה לאירוע ומוכנה לאורחים.', 'info');
     } catch (err) {
-      console.error('[toolbar] publish failed:', err);
-      notify('לא הצלחנו לפרסם את המסגרת. נסו שוב.');
+      console.error('[toolbar] save for event failed:', err);
+      notify(err instanceof Error && err.message ? err.message : 'לא הצלחנו לשמור את המסגרת לאירוע. נסו שוב.');
     } finally {
       setExporting(false);
     }
+  }
+
+  async function saveToEvent() {
+    setExporting(true);
+    try {
+      if (!(await ctx.flush())) {
+        notify('השינויים עוד לא נשמרו. נסו שוב בעוד רגע.');
+        return;
+      }
+      const { getSlotState } = await import('@/services/api');
+      const { slotOf } = await import('@/features/admin/events/eventFrames');
+      const state = await getSlotState(ctx.eventId, slotOf(doc));
+      const replacing = state.frameId && state.frameId !== ctx.templateId;
+      if (replacing && (state.status === 'live' || state.queued > 0)) {
+        setAsk({ live: state.status === 'live', queued: state.queued });
+        return;
+      }
+    } catch (err) {
+      console.error('[toolbar] save for event failed:', err);
+      notify('לא הצלחנו לבדוק את האירוע. נסו שוב.');
+      return;
+    } finally {
+      setExporting(false);
+    }
+    await finishSaveForEvent(false);
   }
 
   async function exportPng() {
@@ -154,13 +178,36 @@ export default function Toolbar({ status, onClose }) {
         <Icon name="fit" />
       </IconButton>
       <span className="w-px h-6 bg-muted mx-1" />
-      <Button variant="primary" onClick={publishFrame} disabled={exporting}>
-        פרסום
-      </Button>
+      {ctx.eventId && (
+        <Button variant="primary" onClick={saveToEvent} disabled={exporting} title="המסגרת מגיעה לאורחים רק אחרי השמירה לאירוע">
+          שמירה לאירוע
+        </Button>
+      )}
       <Button variant="primary" onClick={exportPng} disabled={exporting} title="קובץ PNG להדפסה: החלון של התמונה שקוף">
         <Icon name="download" />
         {exporting ? 'מייצא…' : 'ייצוא PNG'}
       </Button>
+      {ask && (
+        <Dialog title={ask.live ? 'החלפת המסגרת באירוע חי' : 'החלפת המסגרת של האירוע'} onClose={() => setAsk(null)}>
+          {ask.live && <p className="mb-3 text-sm">אורחים חדשים יצלמו במסגרת הזו. מגנטים שכבר הודפסו נשארים עם המסגרת שאיתה צולמו. אורח שבאמצע צילום יתבקש לצלם שוב.</p>}
+          {ask.queued > 0 && <p className="mb-3 text-sm">{ask.queued} מגנטים עוד לא הודפסו. לעדכן גם אותם למסגרת הזו?</p>}
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button onClick={() => setAsk(null)}>ביטול</Button>
+            {ask.queued > 0 ? (
+              <>
+                <Button onClick={() => finishSaveForEvent(false)}>רק למגנטים חדשים</Button>
+                <Button variant="primary" onClick={() => finishSaveForEvent(true)}>
+                  כולל {ask.queued} שבתור
+                </Button>
+              </>
+            ) : (
+              <Button variant="primary" onClick={() => finishSaveForEvent(false)}>
+                שמירה לאירוע
+              </Button>
+            )}
+          </div>
+        </Dialog>
+      )}
     </header>
   );
 }

@@ -551,6 +551,68 @@ export async function attachEventFrame(
   return Number(data ?? 0);
 }
 
+/** Whether any magnet was sent with this frame. Such a frame never changes. */
+export async function frameHasJobs(frameId: string): Promise<boolean> {
+  const { count, error } = await supabase
+    .from("print_jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("frame_id", frameId);
+  if (error) throw toAppError(error, "לא הצלחנו לבדוק את המסגרת.");
+  return (count ?? 0) > 0;
+}
+
+export type EventFrameContext = {
+  eventId: string | null;
+  eventStatus: "draft" | "live" | "closed" | null;
+  isTemplate: boolean;
+  used: boolean;
+  /** Guests see this frame now: it is in one of the event's slots. */
+  attached: boolean;
+  sourceTemplateId: string | null;
+};
+
+/** What the studio needs to know about a frame before editing it. */
+export async function getFrameContext(frameId: string): Promise<EventFrameContext> {
+  const { data, error } = await supabase
+    .from("frames")
+    .select("is_template, event_id, source_template_id")
+    .eq("id", frameId)
+    .single();
+  if (error) throw toAppError(error, "לא הצלחנו לפתוח את המסגרת.");
+  const eventId = (data.event_id as string | null) ?? null;
+  let eventStatus: EventFrameContext["eventStatus"] = null;
+  let attached = false;
+  if (eventId) {
+    const event = await supabase.from("events").select("status, frame_id, frame_portrait_id").eq("id", eventId).single();
+    if (event.error) throw toAppError(event.error, "לא הצלחנו לפתוח את המסגרת.");
+    eventStatus = event.data.status as EventFrameContext["eventStatus"];
+    attached = event.data.frame_id === frameId || event.data.frame_portrait_id === frameId;
+  }
+  return {
+    eventId,
+    eventStatus,
+    isTemplate: data.is_template === true,
+    used: data.is_template === true ? false : await frameHasJobs(frameId),
+    attached,
+    sourceTemplateId: (data.source_template_id as string | null) ?? null,
+  };
+}
+
+/** The frame an event shows now in one slot, the event's status, and that frame's queued magnets. */
+export async function getSlotState(
+  eventId: string,
+  slot: FrameSlot,
+): Promise<{ frameId: string | null; status: "draft" | "live" | "closed"; queued: number }> {
+  const { data, error } = await supabase.from("events").select("status, frame_id, frame_portrait_id").eq("id", eventId).single();
+  if (error) throw toAppError(error, "לא הצלחנו לבדוק את האירוע.");
+  const frameId = ((slot === "landscape" ? data.frame_id : data.frame_portrait_id) as string | null) ?? null;
+  return {
+    frameId,
+    status: data.status as "draft" | "live" | "closed",
+    queued: frameId ? await countQueuedJobs(eventId, frameId) : 0,
+  };
+}
+
 /** Magnets of this event, sent with this frame, that are still waiting to be printed. */
 export async function countQueuedJobs(eventId: string, frameId: string): Promise<number> {
   const { count, error } = await supabase
@@ -601,6 +663,9 @@ export type PublishedFrameWindow = {
   window_h: number;
 };
 
+/** Shown to a guest whose photo was taken in a frame the event has since replaced. */
+export const FRAME_UPDATED = "המסגרת של האירוע עודכנה בינתיים. צלמו שוב במסגרת החדשה.";
+
 const PRINT_ERRORS: Record<string, string> = {
   print_quota_exceeded: "נגמרו המגנטים שלכם לאירוע הזה.",
   event_not_found: "האירוע לא נמצא.",
@@ -608,7 +673,7 @@ const PRINT_ERRORS: Record<string, string> = {
   invalid_copies: "מספר העותקים לא תקין.",
   invalid_storage_path: "לא הצלחנו לשמור את התמונה במקום הנכון.",
   not_authenticated: "החיבור נותק. חזרו לדף האירוע ונסו שוב.",
-  frame_not_in_event: "המסגרת לא שייכת לאירוע הזה.",
+  frame_not_in_event: FRAME_UPDATED,
 };
 
 function mapPrintError(error: unknown): AppError {

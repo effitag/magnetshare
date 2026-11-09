@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { createEvent, getAdminEvent, saveEventCover, updateEventDetails, type AdminEventDetail } from "@/services/api";
 import { EventForm, type EventFormValue } from "./EventForm";
+import { ActivationSection } from "./ActivationSection";
 import { FrameSection } from "./frames/FrameSection";
 import { EventShare } from "./EventShare";
 
@@ -16,6 +17,7 @@ export function EventEditorPage() {
   const [coverName, setCoverName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [hasFrame, setHasFrame] = useState(false);
 
   useEffect(() => {
     if (!eventId) return;
@@ -86,9 +88,16 @@ export function EventEditorPage() {
       {saved ? (
         <FrameSection
           event={{ id: saved.id, title: saved.title, eventDate: saved.eventDate, eventType: saved.eventType, status: saved.status }}
+          onChanged={(frames) => setHasFrame(Boolean(frames.landscape || frames.portrait))}
         />
       ) : null}
       {saved ? <EventShare eventId={saved.id} slug={saved.slug} title={saved.title} /> : null}
+      {saved ? (
+        <ActivationSection
+          event={{ ...saved, hasFrame, hasLink: Boolean(saved.slug) }}
+          onStatus={(status) => setSaved((current) => (current ? { ...current, status } : current))}
+        />
+      ) : null}
     </section>
   );
 }

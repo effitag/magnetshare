@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { blobToThumb } from "@/lib/cropToWindow";
-import { createGuestPrint, uploadGuestPhoto } from "@/services/api";
+import { FRAME_UPDATED, createGuestPrint, uploadGuestPhoto } from "@/services/api";
 import { MagnetFrame, type CameraFrame } from "./MagnetFrame";
 
 type Props = {
@@ -76,6 +76,12 @@ export function MagnetReview({
           <p className="max-w-sm text-center text-base text-primary" role="alert">
             {error}
           </p>
+        ) : null}
+        {error === FRAME_UPDATED ? (
+          // The event's frame was replaced while this photo was taken: reload the camera with the new one.
+          <button type="button" className="cam-send" onClick={() => window.location.reload()}>
+            לצלם שוב
+          </button>
         ) : null}
       </div>
     </div>
