@@ -5,7 +5,6 @@ import type { Plugin } from "vite";
 import { defineConfig } from "vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { nitro } from "nitro/vite";
 // @ts-expect-error JS plugin alongside the TS vite config
 import { appEnvPlugin } from "./scripts/app-env-plugin.mjs";
 import { isMigrationFile } from "./scripts/migration-plan.mjs";
@@ -50,7 +49,7 @@ function pgliteBootstrapPlugin(): Plugin {
 }
 
 // `0.0.0.0:8080` is the live-preview contract — don't change host/port.
-export default defineConfig(({ command, isPreview }) => ({
+export default defineConfig({
   appType: "spa",
   server: {
     host: "0.0.0.0",
@@ -70,9 +69,6 @@ export default defineConfig(({ command, isPreview }) => ({
     pgliteBootstrapPlugin(),
     appEnvPlugin(),
     tailwindcss(),
-    // Nitro only serves index.html for deep links (/e/:slug, /admin/...) on
-    // Vercel until the site moves to static hosting.
-    ...(command === "build" || isPreview ? [nitro({ preset: "vercel" })] : []),
     viteReact(),
   ],
-}));
+});
