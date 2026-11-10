@@ -22,7 +22,13 @@
 --    thumbnail sits next to the photo with the same name prefix, so it is
 --    in the same folder.
 --
--- Same function signatures, grants and trigger. No table changes. No rows.
+-- 4. Own folder on every route. A check constraint on guest_photos holds the
+--    same rule for every insert and update, including a direct REST insert
+--    that does not go through create_guest_print. A row whose path is not
+--    <event_id>/<guest_id>/<file name> of that same row is refused (23514).
+--    Every existing row in Lab and production was checked before adding it.
+--
+-- Same function signatures, grants and trigger. One new constraint. No rows.
 --
 -- Exception messages the app maps to Hebrew:
 --   print_quota_exceeded, event_not_found, event_not_live, invalid_copies,
@@ -190,5 +196,15 @@ $$;
 revoke all on function public.create_guest_print(uuid, text, integer, uuid) from public, anon, authenticated;
 grant execute on function public.create_guest_print(uuid, text, integer, uuid) to authenticated;
 revoke execute on function public.create_guest_print(uuid, text, integer, uuid) from service_role;
+
+-- The same file-name rule as create_guest_print. A file name has no "/", so it
+-- cannot leave the folder.
+alter table public.guest_photos
+  add constraint guest_photos_path_own_folder
+  check (
+    storage_path ~ (
+      '^' || event_id::text || '/' || guest_id::text || '/[A-Za-z0-9][A-Za-z0-9._-]{0,199}$'
+    )
+  );
 
 commit;

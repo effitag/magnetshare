@@ -11,6 +11,10 @@
 //   idem     One guest sends the same photo path twice at the same moment, then once more: one magnet.
 //   quota    One new guest sends 7 different photos at the same moment: 5 magnets, 2 print_quota_exceeded.
 //   foreign  A guest sends paths outside their own folder: storage_path_not_yours and no magnet.
+//   direct   A guest skips the RPC and inserts guest_photos rows straight through REST with
+//            paths outside their own folder: every one refused by guest_photos_path_own_folder
+//            (23514). One insert in their own folder is the control and goes through, which shows
+//            the refusals come from the constraint and not from RLS.
 //
 // Every scenario reads each guest's own print_jobs back through RLS and checks
 // that no guest sees another guest's magnet.
@@ -19,7 +23,10 @@
 //   SUPABASE_URL=https://gexvrhhnmezkugldjjax.supabase.co \
 //   SUPABASE_ANON_KEY=<Lab publishable key> \
 //   node supabase/tests/send-concurrency.mjs --event <uuid> --frame <uuid> \
-//     [--guests 30] [--rounds 3] [--scenarios many,idem,quota,foreign] [--label before] [--out result.json]
+//     [--guests 30] [--rounds 3] [--scenarios many,idem,quota,foreign,direct] [--label before]
+//     [--out result.json] [--ids guest-ids.txt]
+//
+// --ids writes the id of every anonymous guest the run signed in, one per line, for the cleanup.
 //
 // Anonymous sign-ins used: guests + 2 (idem and quota use a new guest each).
 // Lab allows 500 anonymous sign-ins per hour.
@@ -40,7 +47,7 @@ function fail(message) {
 }
 
 function parseArgs(argv) {
-  const args = { guests: 30, rounds: 3, scenarios: "many,idem,quota,foreign", label: "run" };
+  const args = { guests: 30, rounds: 3, scenarios: "many,idem,quota,foreign,direct", label: "run" };
   for (let i = 0; i < argv.length; i += 1) {
     const key = argv[i];
     const value = argv[i + 1];
@@ -91,6 +98,7 @@ if (!UUID.test(args.frame || "")) fail("--frame <uuid> is required");
 const scenarios = new Set(String(args.scenarios).split(","));
 
 let signIns = 0;
+const guestIds = [];
 
 async function call(path, init) {
   const started = performance.now();
@@ -130,6 +138,7 @@ async function signInGuest() {
   if (result.status !== 200 || !token || !id) {
     fail(`anonymous sign-in failed: ${result.status} ${JSON.stringify(result.body).slice(0, 200)}`);
   }
+  guestIds.push(id);
   return { id, token };
 }
 
@@ -320,6 +329,68 @@ async function foreign(owner, intruder) {
   };
 }
 
+/** The guest's own photo rows for the test event, read through RLS. */
+async function ownPhotoCount(guest) {
+  const result = await call(`/rest/v1/guest_photos?select=id&event_id=eq.${args.event}`, {
+    headers: { apikey: KEY, authorization: `Bearer ${guest.token}` },
+  });
+  return Array.isArray(result.body) ? result.body.length : -1;
+}
+
+/** A direct REST insert into guest_photos, as a guest could do without the app. */
+async function insertPhotoRow(guest, storagePath) {
+  const result = await call("/rest/v1/guest_photos", {
+    method: "POST",
+    headers: {
+      apikey: KEY,
+      authorization: `Bearer ${guest.token}`,
+      "content-type": "application/json",
+      prefer: "return=minimal",
+    },
+    body: JSON.stringify({ event_id: args.event, guest_id: guest.id, storage_path: storagePath }),
+  });
+  if (result.status === 201) return "inserted";
+  const body = result.body ?? {};
+  const message = typeof body === "object" ? String(body.message ?? "") : String(body);
+  const constraint = message.includes("guest_photos_path_own_folder")
+    ? " guest_photos_path_own_folder"
+    : "";
+  return `${typeof body === "object" && body.code ? body.code : `http_${result.status}`}${constraint}`;
+}
+
+async function direct(owner, intruder) {
+  const before = await ownPhotoCount(intruder);
+  const ownerBefore = await ownPhotoCount(owner);
+  const cases = {
+    other_guests_folder: `${args.event}/${owner.id}/${randomUUID()}_photo.jpg`,
+    escape_with_dots: `${args.event}/${intruder.id}/../${owner.id}/${randomUUID()}_photo.jpg`,
+    sub_folder: `${args.event}/${intruder.id}/x/${randomUUID()}_photo.jpg`,
+    other_event_folder: `${randomUUID()}/${intruder.id}/${randomUUID()}_photo.jpg`,
+  };
+  const results = {};
+  for (const [name, path] of Object.entries(cases)) {
+    results[name] = await insertPhotoRow(intruder, path);
+  }
+  const control = await insertPhotoRow(
+    intruder,
+    `${args.event}/${intruder.id}/${randomUUID()}_photo.jpg`,
+  );
+  const after = await ownPhotoCount(intruder);
+  const ownerAfter = await ownPhotoCount(owner);
+  const pass =
+    Object.values(results).every((code) => code === "23514 guest_photos_path_own_folder") &&
+    control === "inserted" &&
+    after - before === 1 &&
+    ownerAfter === ownerBefore;
+  return {
+    results,
+    own_folder_control: control,
+    intruder_new_rows: after - before,
+    owner_new_rows: ownerAfter - ownerBefore,
+    pass,
+  };
+}
+
 const report = {
   label: args.label,
   started_at: new Date().toISOString(),
@@ -328,15 +399,17 @@ const report = {
   realtime_connections: 0,
   uploads: 0,
 };
-const guests =
-  scenarios.has("many") || scenarios.has("foreign") ? await signInGuests(args.guests) : [];
+const needsGuests = ["many", "foreign", "direct"].some((name) => scenarios.has(name));
+const guests = needsGuests ? await signInGuests(args.guests) : [];
 if (scenarios.has("many")) report.many = await many(guests);
 if (scenarios.has("idem")) report.idem = await idem();
 if (scenarios.has("quota")) report.quota = await quota();
 if (scenarios.has("foreign")) report.foreign = await foreign(guests[0], guests[1]);
+if (scenarios.has("direct")) report.direct = await direct(guests[0], guests[1]);
 report.anonymous_sign_ins = signIns;
 report.finished_at = new Date().toISOString();
 
 const json = JSON.stringify(report, null, 2);
 console.log(json);
 if (args.out) writeFileSync(args.out, `${json}\n`);
+if (args.ids) writeFileSync(args.ids, `${guestIds.join("\n")}\n`);
