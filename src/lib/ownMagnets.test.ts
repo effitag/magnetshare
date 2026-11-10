@@ -5,6 +5,7 @@ import {
   POLL_JITTER_MS,
   SIGNED_URL_LIFETIME_MS,
   SIGNED_URL_MARGIN_MS,
+  SIGNED_URL_RETRY_MS,
   SignedUrlCache,
   hasPendingMagnet,
   nextPollDelay,
@@ -87,15 +88,22 @@ describe("signed URL cache", () => {
     expect(sign).toHaveBeenCalledTimes(2);
   });
 
-  it("does not keep a failed signing", async () => {
+  it("tries a failed signing again after 2 minutes, not on every refresh", async () => {
+    let now = 0;
     const sign = vi
       .fn<(path: string) => Promise<string | null>>()
       .mockResolvedValueOnce(null)
       .mockRejectedValueOnce(new Error("network"))
       .mockResolvedValueOnce("signed:a");
-    const cache = new SignedUrlCache(sign, () => 0);
+    const cache = new SignedUrlCache(sign, () => now);
     expect(await cache.get("a")).toBeNull();
+    now = SIGNED_URL_RETRY_MS - 1;
     expect(await cache.get("a")).toBeNull();
+    expect(sign).toHaveBeenCalledTimes(1);
+    now = SIGNED_URL_RETRY_MS;
+    expect(await cache.get("a")).toBeNull();
+    expect(sign).toHaveBeenCalledTimes(2);
+    now = 2 * SIGNED_URL_RETRY_MS;
     expect(await cache.get("a")).toBe("signed:a");
     expect(sign).toHaveBeenCalledTimes(3);
   });

@@ -152,13 +152,16 @@ export class MagnetPoller<T extends { status: string }> {
 /** Signed thumbnail URLs live 30 minutes. A cached one is used until 5 minutes before that. */
 export const SIGNED_URL_LIFETIME_MS = 30 * 60_000;
 export const SIGNED_URL_MARGIN_MS = 5 * 60_000;
+/** A path that could not be signed (missing thumbnail, network error) is tried again after 2 minutes, not on every refresh. */
+export const SIGNED_URL_RETRY_MS = 2 * 60_000;
 
 type CachedUrl = { url: string | null; expiresAt: number };
 
 /**
  * Keeps one signed URL per storage path, so a refresh of the guest's magnets
  * does not sign (and download) every thumbnail again. Concurrent requests for
- * the same path share one signing call. A failed signing is not kept.
+ * the same path share one signing call. A failed signing is remembered for
+ * 2 minutes, so a missing thumbnail is not signed again on every refresh.
  */
 export class SignedUrlCache {
   private readonly urls = new Map<string, CachedUrl>();
@@ -169,6 +172,7 @@ export class SignedUrlCache {
     private readonly now: () => number = Date.now,
     private readonly lifetimeMs: number = SIGNED_URL_LIFETIME_MS,
     private readonly marginMs: number = SIGNED_URL_MARGIN_MS,
+    private readonly retryMs: number = SIGNED_URL_RETRY_MS,
   ) {}
 
   get(path: string): Promise<string | null> {
@@ -179,13 +183,12 @@ export class SignedUrlCache {
     const signedAt = this.now();
     const request = this.sign(path)
       .then((url) => {
-        if (url)
-          this.urls.set(path, { url, expiresAt: signedAt + this.lifetimeMs - this.marginMs });
-        else this.urls.delete(path);
+        const keepFor = url ? this.lifetimeMs - this.marginMs : this.retryMs;
+        this.urls.set(path, { url, expiresAt: signedAt + keepFor });
         return url;
       })
       .catch(() => {
-        this.urls.delete(path);
+        this.urls.set(path, { url: null, expiresAt: signedAt + this.retryMs });
         return null;
       })
       .finally(() => {
