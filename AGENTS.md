@@ -1,9 +1,7 @@
 # MagnetimShare — instructions for coding agents
 
 Read this whole file before changing anything. It describes the real project
-and the owner's working rules. It replaces the Grok App Builder sandbox
-contract that used to live here; nothing in this repository runs in that
-sandbox any more.
+and the owner's working rules.
 
 ## The product
 
@@ -32,7 +30,14 @@ guests.
 - Supabase: anonymous auth for guests, Google for admins, Postgres with RLS on
   every table, a private `media` storage bucket, realtime on `print_jobs`.
 - Tailwind v4. Design tokens live only in `src/theme.css`.
-- Hosted on Vercel (team `effitags-projects`, project `magnetshare`).
+- Hosted on Vercel (team `effitags-projects`, project `magnetshare`) as a
+  static site: Vite builds `dist/`, the CDN serves it, and every route without
+  a file extension falls back to `index.html`. There are no server functions;
+  server-side rules live in Supabase (RLS and SQL functions).
+- Vercel settings live in `vercel.json` (framework, install and build
+  commands, output directory, rewrites, cache headers). The Node version is
+  `engines.node` in `package.json` (22). A change to either is a Vercel
+  settings change: list it in the pull request.
 - Hebrew, right to left, mobile first around 375px wide.
 
 ## Where things are
@@ -48,13 +53,8 @@ guests.
 | `src/theme.css` | Colors, fonts, shadows |
 | `supabase/migrations` | Every schema change, one file per change, in order |
 | `supabase/schema.sql` | Reference snapshot of the schema |
-
-Platform leftovers from Grok App Builder are not used by the product: the
-PGlite database, Better Auth, the Nitro server layer and `server/`, the Grok
-PWA plugin and its `grok.com` script, `src/lib/auth`, `src/lib/app-data`,
-`src/lib/db.ts`, `src/lib/multiplayer`, `migrations/auth`, `startup.sh` and the
-`scripts/*` sandbox tooling. Do not build on them. Remove them only in a task
-that asks for it.
+| `public/` | Static files served as they are (fonts, studio assets, `robots.txt`) |
+| `vercel.json` | Every Vercel setting for this project |
 
 ## Rules
 
@@ -101,14 +101,12 @@ Run these and make sure they pass. GitHub Actions runs the same checks on every
 pull request.
 
 - `npm run build`
-- `npx vitest run` (product unit tests)
-- `npx tsc --noEmit --checkJs false` (TypeScript files; the studio JavaScript
-  is not type checked yet)
-
-`npm test` also runs Grok sandbox tests that fail outside that sandbox. Do not
-use it as a gate.
+- `npm test` (the product unit tests, with Vitest)
+- `npm run typecheck` (TypeScript files; the studio JavaScript is not type
+  checked yet)
 
 ## Running locally
 
-`npm run dev` starts the app on port 8080. It needs `VITE_SUPABASE_URL` and
-`VITE_SUPABASE_ANON_KEY` of the test project in the environment.
+Use Node 22. `npm ci` installs the dependencies, and `npm run dev` starts the
+app on port 8080. It needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` of
+the test project in the environment.
