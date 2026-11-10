@@ -775,20 +775,3 @@ export async function listOwnPrintJobs(eventId: string): Promise<PrintJob[]> {
   }
 }
 
-export function subscribeOwnPrintJobs(eventId: string, guestId: string, onChange: () => void): () => void {
-  const channel = supabase
-    .channel(`guest-prints-${eventId}-${guestId}`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "print_jobs", filter: `event_id=eq.${eventId}` },
-      (payload) => {
-        const row = (payload.new ?? payload.old) as { guest_id?: string } | undefined;
-        if (row?.guest_id && row.guest_id !== guestId) return;
-        onChange();
-      },
-    )
-    .subscribe();
-  return () => {
-    void supabase.removeChannel(channel);
-  };
-}
