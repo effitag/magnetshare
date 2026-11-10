@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { CameraOff, Film, Loader2, RotateCw, Upload, X, Zap, ZapOff } from "lucide-react";
 import { canvasToJpeg, cropCanvasToWindow, type WindowFrame } from "@/lib/cropToWindow";
+import { newSendId } from "@/lib/guestSend";
 import { countMagnetsLeft } from "@/lib/magnets";
 import type { PrintJob } from "@/services/types";
 import { inAppBrowser } from "../browser";
@@ -116,6 +117,7 @@ export function MagnetCamera({
   const [mode, setMode] = useState<"camera" | "review" | "sent">("camera");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
+  const [sendId, setSendId] = useState<string | null>(null);
   const [wide, setWide] = useState(() => window.matchMedia("(orientation: landscape)").matches);
   const [orient, setOrient] = useState<Orient>(() => {
     const saved = readOrient(eventId);
@@ -146,6 +148,7 @@ export function MagnetCamera({
     photoUrlRef.current = url;
     setPhotoUrl(url);
     setPhotoBlob(blob);
+    setSendId(newSendId());
   }
 
   function choose(next: Orient) {
@@ -602,10 +605,11 @@ export function MagnetCamera({
         </div>
       ) : null}
     </div>
-    {mode === "review" && photoUrl && photoBlob ? (
+    {mode === "review" && photoUrl && photoBlob && sendId ? (
       <MagnetReview
         photoUrl={photoUrl}
         blob={photoBlob}
+        sendId={sendId}
         eventId={eventId}
         guestId={guestId}
         frameId={active.id}

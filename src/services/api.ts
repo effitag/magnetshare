@@ -1,5 +1,6 @@
 import { AppError, toAppError } from "@/lib/errors";
 import { isEventType, type EventType } from "@/lib/eventTypes";
+import { guestPhotoPaths, isAlreadyStored } from "@/lib/guestSend";
 import { countMagnetsLeft, type FrameSlot } from "@/lib/magnets";
 import { supabase } from "@/lib/supabase";
 import { isFrameObjectPath } from "@/features/studio/storage/paths";
@@ -208,25 +209,34 @@ export const frameGateway = {
   },
 };
 
-export async function uploadGuestPhoto(eventId: string, guestId: string, file: File, thumb: Blob): Promise<string> {
-  const stamp = Date.now();
-  const safeName = file.name.replace(/[^\w.-]+/g, "_") || "photo.jpg";
-  const path = `${eventId}/${guestId}/${stamp}_${safeName}`;
-  const thumbKey = `${eventId}/${guestId}/${stamp}_thumb.webp`;
-  if (path.split("/")[0] === "frames" || path.split("/")[0] === "events") {
+/**
+ * Uploads one send to its fixed paths and returns the photo path. A retry of
+ * the same send (same sendId) finds the files already there and goes on.
+ */
+export async function uploadGuestPhoto(
+  eventId: string,
+  guestId: string,
+  sendId: string,
+  photo: Blob,
+  thumb: Blob,
+): Promise<string> {
+  const paths = guestPhotoPaths(eventId, guestId, sendId);
+  if (paths.photo.split("/")[0] === "frames" || paths.photo.split("/")[0] === "events") {
     throw toAppError(new Error("reserved"), "אי אפשר לשמור קובץ של אורח בתיקייה הזו.");
   }
-  const thumbUpload = await supabase.storage.from("media").upload(thumbKey, thumb, {
+  const thumbUpload = await supabase.storage.from("media").upload(paths.thumb, thumb, {
     contentType: "image/webp",
     upsert: false,
   });
-  if (thumbUpload.error) throw toAppError(thumbUpload.error, "לא הצלחנו לשמור את התמונה. נסו שוב.");
-  const { error } = await supabase.storage.from("media").upload(path, file, {
-    contentType: file.type || "image/jpeg",
+  if (thumbUpload.error && !isAlreadyStored(thumbUpload.error)) {
+    throw toAppError(thumbUpload.error, "לא הצלחנו לשמור את התמונה. נסו שוב.");
+  }
+  const { error } = await supabase.storage.from("media").upload(paths.photo, photo, {
+    contentType: "image/jpeg",
     upsert: false,
   });
-  if (error) throw toAppError(error, "לא הצלחנו לשמור את התמונה. נסו שוב.");
-  return path;
+  if (error && !isAlreadyStored(error)) throw toAppError(error, "לא הצלחנו לשמור את התמונה. נסו שוב.");
+  return paths.photo;
 }
 
 export type AdminEventRow = {
@@ -672,6 +682,7 @@ const PRINT_ERRORS: Record<string, string> = {
   event_not_live: "האירוע לא פתוח לצילום.",
   invalid_copies: "מספר העותקים לא תקין.",
   invalid_storage_path: "לא הצלחנו לשמור את התמונה במקום הנכון.",
+  storage_path_not_yours: "אפשר לשלוח רק תמונה שצילמתם כאן. חזרו לדף האירוע וצלמו שוב.",
   not_authenticated: "החיבור נותק. חזרו לדף האירוע ונסו שוב.",
   frame_not_in_event: FRAME_UPDATED,
 };

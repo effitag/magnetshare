@@ -23,7 +23,7 @@ export function magnetLine(left: number): string {
   return `נשארו לכם ${left} מגנטים`;
 }
 
-/** Landing never loads the print file. The thumb shares the photo's timestamp. */
+/** Landing never loads the print file. The thumb shares the photo's name prefix (send id, or a timestamp on older photos). */
 export function thumbPathFromPhoto(storagePath: string): string {
   const slash = storagePath.lastIndexOf("/");
   const dir = slash >= 0 ? storagePath.slice(0, slash) : "";
