@@ -36,7 +36,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: npx vitest run
+      - run: npm test
 
   types:
     name: TypeScript

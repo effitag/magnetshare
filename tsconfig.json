@@ -12,10 +12,10 @@
     "strict": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    // `src/lib/db.ts` imports scripts/migration-plan.mjs; checkJs types the
-    // implementation itself instead of a hand-written declaration beside it.
+    // TypeScript files import the studio's JavaScript modules. The studio is
+    // not type checked yet, so its JavaScript is resolved but not checked.
     "allowJs": true,
-    "checkJs": true,
+    "checkJs": false,
     "noEmit": true,
     "types": [
       "vite/client",

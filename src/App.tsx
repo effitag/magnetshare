@@ -8,14 +8,6 @@ import { LegalPage } from "@/features/home/LegalPage";
 import { NotFoundPage } from "@/features/home/NotFoundPage";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 
-const DevOnlyPreviewBridge = import.meta.env.DEV
-  ? lazy(() =>
-      import("@/components/PreviewBridge").then((module) => ({
-        default: module.PreviewBridge,
-      })),
-    )
-  : null;
-
 const FramesTab = lazy(() => import("@/features/studio/FramesTab"));
 const EventEditorPage = lazy(() =>
   import("@/features/admin/events/EventEditorPage").then((module) => ({ default: module.EventEditorPage })),
@@ -32,11 +24,6 @@ export function App() {
   return (
     <AuthProvider>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        {DevOnlyPreviewBridge ? (
-          <Suspense fallback={null}>
-            <DevOnlyPreviewBridge />
-          </Suspense>
-        ) : null}
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/privacy" element={<LegalPage kind="privacy" />} />
