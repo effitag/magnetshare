@@ -125,7 +125,6 @@ export function MagnetCamera({
     if (saved === "landscape" && landscape) return "landscape";
     return landscape ? "landscape" : "portrait";
   });
-  const [sentJobs, setSentJobs] = useState<PrintJob[] | null>(null);
   const [serverJobs, setServerJobs] = useState(jobs);
   modeRef.current = mode;
   isFrontRef.current = isFront;
@@ -620,14 +619,13 @@ export function MagnetCamera({
           const next = await onPrinted();
           refreshGen.current += 1;
           setServerJobs(next);
-          setSentJobs(next);
           setMode("sent");
         }}
       />
     ) : null}
     {mode === "sent" && photoUrl ? (
       <PrintStatus
-        jobs={sentJobs ?? jobs}
+        jobs={serverJobs}
         quota={quota}
         photoUrl={photoUrl}
         frame={active.frame}

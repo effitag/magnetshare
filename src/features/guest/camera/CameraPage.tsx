@@ -6,10 +6,10 @@ import {
   getPublishedFrameWindow,
   listOwnPrintJobs,
   signedMediaUrl,
-  subscribeOwnPrintJobs,
 } from "@/services/api";
 import type { PrintJob } from "@/services/types";
 import { GuestQuiet } from "../GuestQuiet";
+import { useOwnMagnets } from "../useOwnMagnets";
 import { MagnetCamera, type CameraChoice } from "./MagnetCamera";
 
 type Ready = {
@@ -49,7 +49,6 @@ export function CameraPage() {
 
   useEffect(() => {
     let cancelled = false;
-    let stop = () => {};
     getEventCardBySlug(slug)
       .then(async (card) => {
         if (cancelled) return;
@@ -74,20 +73,12 @@ export function CameraPage() {
         }
         const next: Ready = { eventId: card.id, quota: card.print_quota, guestId, landscape, portrait, jobs };
         setReady(next);
-        const unsubscribe = subscribeOwnPrintJobs(card.id, guestId, () => {
-          void listOwnPrintJobs(card.id).then((rows) => {
-            if (!cancelled) setReady((current) => (current ? { ...current, jobs: rows } : current));
-          });
-        });
-        if (cancelled) unsubscribe();
-        else stop = unsubscribe;
       })
       .catch((cause: Error) => {
         if (!cancelled) setError(cause.message);
       });
     return () => {
       cancelled = true;
-      stop();
     };
   }, [slug]);
 
@@ -97,13 +88,13 @@ export function CameraPage() {
 
   return (
     <CameraLive
+      key={ready.eventId}
       eventId={ready.eventId}
       quota={ready.quota}
       guestId={ready.guestId}
       landscape={ready.landscape}
       portrait={ready.portrait}
       jobs={ready.jobs}
-      onJobs={(jobs) => setReady((current) => (current ? { ...current, jobs } : current))}
       onClose={() => navigate(`/e/${slug}`)}
     />
   );
@@ -116,7 +107,6 @@ function CameraLive({
   landscape,
   portrait,
   jobs,
-  onJobs,
   onClose,
 }: {
   eventId: string;
@@ -125,19 +115,17 @@ function CameraLive({
   landscape: CameraChoice | null;
   portrait: CameraChoice | null;
   jobs: PrintJob[];
-  onJobs: (jobs: PrintJob[]) => void;
   onClose: () => void;
 }) {
-  const reloadJobs = useCallback(async () => {
-    const next = await listOwnPrintJobs(eventId);
-    onJobs(next);
-    return next;
-  }, [eventId, onJobs]);
+  // The guest's magnets stay current without Realtime: a read right after a
+  // send, on return to the page, and every ~20 s while a magnet is pending.
+  const magnets = useOwnMagnets(eventId, jobs);
+  const { refresh, catchUp } = magnets;
 
   const refreshJobs = useCallback(async () => {
     await ensureGuestSession();
-    return reloadJobs();
-  }, [reloadJobs]);
+    return catchUp();
+  }, [catchUp]);
 
   return (
     <MagnetCamera
@@ -146,9 +134,9 @@ function CameraLive({
       quota={quota}
       landscape={landscape}
       portrait={portrait}
-      jobs={jobs}
+      jobs={magnets.jobs}
       onClose={onClose}
-      onPrinted={reloadJobs}
+      onPrinted={refresh}
       onRefreshJobs={refreshJobs}
     />
   );
