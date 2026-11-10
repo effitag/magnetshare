@@ -7,6 +7,8 @@ import { MagnetFrame, type CameraFrame } from "./MagnetFrame";
 type Props = {
   photoUrl: string;
   blob: Blob;
+  /** Made once per captured photo. A second tap or a retry sends the same photo again, never a new one. */
+  sendId: string;
   eventId: string;
   guestId: string;
   frameId: string;
@@ -19,6 +21,7 @@ type Props = {
 export function MagnetReview({
   photoUrl,
   blob,
+  sendId,
   eventId,
   guestId,
   frameId,
@@ -36,9 +39,8 @@ export function MagnetReview({
     setSending(true);
     setError(null);
     try {
-      const file = new File([blob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" });
       const thumb = await blobToThumb(blob);
-      const path = await uploadGuestPhoto(eventId, guestId, file, thumb);
+      const path = await uploadGuestPhoto(eventId, guestId, sendId, blob, thumb);
       await createGuestPrint(eventId, path, 1, frameId);
       if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
       await onSent();
