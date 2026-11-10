@@ -30,8 +30,7 @@
     "allowImportingTsExtensions": true
   },
   "include": [
-    "src",
-    "server"
+    "src"
   ],
   "exclude": [
     "src/features/studio"
