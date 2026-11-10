@@ -82,7 +82,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) throw error;
       },
       signOut: async () => {
-        await supabase.auth.signOut();
+        // Signs out on the server (every device). If that request fails, for
+        // example offline, the local sign-out still removes the session stored
+        // in this browser, so it does not come back on the next visit.
+        const { error } = await supabase.auth.signOut();
+        if (error) await supabase.auth.signOut({ scope: "local" });
       },
     }),
     [loading, session, isAdmin],

@@ -1,6 +1,7 @@
 import { AppError, toAppError } from "@/lib/errors";
 import { isEventType, type EventType } from "@/lib/eventTypes";
 import { guestPhotoPaths, isAlreadyStored } from "@/lib/guestSend";
+import { createGuestSignIn } from "@/lib/guestSession";
 import { countMagnetsLeft, type FrameSlot } from "@/lib/magnets";
 import { supabase } from "@/lib/supabase";
 import { isFrameObjectPath } from "@/features/studio/storage/paths";
@@ -635,12 +636,21 @@ export async function countQueuedJobs(eventId: string, frameId: string): Promise
   return count ?? 0;
 }
 
+/** The guest of this browser: the stored session if there is one, otherwise one new anonymous guest for all tabs. */
+const ensureGuest = createGuestSignIn({
+  currentUserId: async () => {
+    const existing = await supabase.auth.getSession();
+    return existing.data.session?.user?.id ?? null;
+  },
+  signIn: async () => {
+    const signed = await supabase.auth.signInAnonymously();
+    if (signed.error || !signed.data.user) throw toAppError(signed.error, "לא הצלחנו לפתוח את האירוע. נסו שוב.");
+    return signed.data.user.id;
+  },
+});
+
 export async function ensureGuestSession(): Promise<string> {
-  const existing = await supabase.auth.getSession();
-  if (existing.data.session?.user) return existing.data.session.user.id;
-  const signed = await supabase.auth.signInAnonymously();
-  if (signed.error || !signed.data.user) throw toAppError(signed.error, "לא הצלחנו לפתוח את האירוע. נסו שוב.");
-  return signed.data.user.id;
+  return ensureGuest();
 }
 
 export async function guestMagnetsLeft(eventId: string, quota: number): Promise<number> {
