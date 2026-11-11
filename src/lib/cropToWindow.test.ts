@@ -2,17 +2,29 @@ import { describe, expect, it } from "vitest";
 import { capLongEdge, coverCropSource, printWindowPixels, encodeThumb } from "./cropToWindow";
 
 describe("print window crop", () => {
-  it("sizes the window at 25 pixels per millimetre", () => {
+  it("sizes the window at 20 pixels per millimetre", () => {
+    // The 100 × 75 mm magnet with its 92 × 54.5 mm photo window, as in the frames in use.
     expect(
-      printWindowPixels({ widthMm: 100, heightMm: 150, windowW: 0.5, windowH: 0.8 }),
-    ).toEqual({ width: 1250, height: 3000 });
+      printWindowPixels({ widthMm: 100, heightMm: 75, windowW: 0.92, windowH: 0.7267 }),
+    ).toEqual({ width: 1840, height: 1090 });
   });
 
-  it("caps the long edge at 3000 and keeps the aspect", () => {
+  it("keeps a margin of at least 1.5× over 300 DPI below the cap", () => {
+    const window = { widthMm: 100, heightMm: 75, windowW: 0.92, windowH: 0.7267 };
+    const px = printWindowPixels(window);
+    const at300dpi = (mm: number) => (mm * 300) / 25.4;
+    expect(px.width).toBeGreaterThanOrEqual(1.5 * at300dpi(window.widthMm * window.windowW));
+    expect(px.height).toBeGreaterThanOrEqual(1.5 * at300dpi(window.heightMm * window.windowH));
+  });
+
+  it("caps the long edge at 2000 and keeps the aspect", () => {
     expect(
       printWindowPixels({ widthMm: 200, heightMm: 100, windowW: 1, windowH: 1 }),
-    ).toEqual({ width: 3000, height: 1500 });
-    expect(capLongEdge(5000, 2500, 3000)).toEqual({ width: 3000, height: 1500 });
+    ).toEqual({ width: 2000, height: 1000 });
+    expect(
+      printWindowPixels({ widthMm: 100, heightMm: 75, windowW: 1, windowH: 1 }),
+    ).toEqual({ width: 2000, height: 1500 });
+    expect(capLongEdge(5000, 2500, 2000)).toEqual({ width: 2000, height: 1000 });
   });
 
   it("cover-crops from the center, not the top", () => {

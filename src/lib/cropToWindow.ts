@@ -1,11 +1,18 @@
 /**
  * Centered cover-crop into the frame's photo window.
  * The print station places overlay.png on top, so this never draws the frame.
- * Pixels = window fraction × frame millimetres × 25, long edge capped at 3000.
+ *
+ * Pixels = window fraction × frame millimetres × 20, long edge capped at 2000.
+ * The magnet prints at 300 DPI (11.8 px/mm); 20 px/mm (508 DPI) keeps a 1.7×
+ * margin for the station's scaling. For the 92 × 54.5 mm window of the frames
+ * in use that is 1840 × 1090 px, where 300 DPI needs 1087 × 644 px.
+ * JPEG 0.85 with these pixels is about half of the earlier file (25 px/mm, cap
+ * 3000, 0.92), so the upload is about twice as fast on a weak network.
+ * The values are confirmed with a test print.
  */
-export const PRINT_PX_PER_MM = 25;
-export const MAX_PHOTO_EDGE = 3000;
-export const JPEG_QUALITY = 0.92;
+export const PRINT_PX_PER_MM = 20;
+export const MAX_PHOTO_EDGE = 2000;
+export const JPEG_QUALITY = 0.85;
 
 export type WindowFrame = {
   widthMm: number;
