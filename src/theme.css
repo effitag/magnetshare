@@ -552,6 +552,30 @@
   line-height: 1.4;
 }
 
+/* The closed event's thank-you screen. */
+.guest-top.is-compact .guest-hero {
+  height: 40svh;
+  min-height: 40svh;
+}
+
+.guest-thanks {
+  margin: 0.25rem 0 1rem;
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  line-height: 1.15;
+  color: var(--color-ink);
+}
+
+.guest-closed-design {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 1.25rem;
+}
+
+.guest-closed-design > div {
+  box-shadow: var(--shadow-polaroid);
+}
+
 .guest-note {
   position: absolute;
   z-index: 4;

@@ -10,6 +10,7 @@ import {
 } from "@/services/api";
 import type { PrintJob } from "@/services/types";
 import { GuestQuiet } from "../GuestQuiet";
+import { useEventRecheck } from "../useEventRecheck";
 import { useOwnMagnets } from "../useOwnMagnets";
 import { useOutboxResume } from "../useOutboxResume";
 import { MagnetCamera, type CameraChoice } from "./MagnetCamera";
@@ -46,7 +47,7 @@ export function CameraPage() {
   const { slug = "" } = useParams();
   const navigate = useNavigate();
   const [ready, setReady] = useState<Ready | null>(null);
-  const [note, setNote] = useState<"missing" | "closed" | null>(null);
+  const [note, setNote] = useState<"missing" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [waiting, setWaiting] = useState(false);
 
@@ -60,7 +61,8 @@ export function CameraPage() {
           return;
         }
         if (card.status === "closed") {
-          setNote("closed");
+          // The event page shows the closed event's thank-you screen.
+          navigate(`/e/${slug}`, { replace: true });
           return;
         }
         const guestId = await ensureGuestSession({ onWait: () => setWaiting(true) });
@@ -83,7 +85,7 @@ export function CameraPage() {
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, navigate]);
 
   if (error) return <main className="guest-stage px-5 pt-10 text-base text-primary">{error}</main>;
   if (note) return <GuestQuiet mode={note} />;
@@ -100,7 +102,9 @@ export function CameraPage() {
       landscape={ready.landscape}
       portrait={ready.portrait}
       jobs={ready.jobs}
+      slug={slug}
       onClose={() => navigate(`/e/${slug}`)}
+      onEventClosed={() => navigate(`/e/${slug}`, { replace: true })}
     />
   );
 }
@@ -112,7 +116,9 @@ function CameraLive({
   landscape,
   portrait,
   jobs,
+  slug,
   onClose,
+  onEventClosed,
 }: {
   eventId: string;
   quota: number;
@@ -120,8 +126,12 @@ function CameraLive({
   landscape: CameraChoice | null;
   portrait: CameraChoice | null;
   jobs: PrintJob[];
+  slug: string;
   onClose: () => void;
+  onEventClosed: () => void;
 }) {
+  // Back on the camera after the admin closed the event: go to the thank-you screen.
+  useEventRecheck(slug, onEventClosed);
   // The guest's magnets stay current without Realtime: a read right after a
   // send, on return to the page, and every ~20 s while a magnet is pending.
   const magnets = useOwnMagnets(eventId, jobs);
@@ -147,6 +157,7 @@ function CameraLive({
       onClose={onClose}
       onPrinted={refresh}
       onRefreshJobs={refreshJobs}
+      onEventClosed={onEventClosed}
     />
   );
 }

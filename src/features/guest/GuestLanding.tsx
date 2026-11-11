@@ -13,7 +13,7 @@ export type GuestFrame = {
 };
 
 type Props = {
-  mode: "live" | "missing" | "closed";
+  mode: "live" | "missing";
   title?: string;
   dateLabel?: string | null;
   coverUrl?: string | null;
@@ -51,7 +51,7 @@ export function GuestLanding({
   cameraTo,
 }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
-  if (mode === "missing" || mode === "closed") return <GuestQuiet mode={mode} />;
+  if (mode === "missing") return <GuestQuiet mode={mode} />;
   const open = shots.find((shot) => shot.id === openId) ?? null;
   const openFrame =
     (open?.frameId && portrait?.id === open.frameId ? portrait : null) ??
@@ -87,7 +87,7 @@ export function GuestLanding({
   );
 }
 
-function ShotDialog({ shot, frame, onClose }: { shot: GuestShot; frame: GuestFrame; onClose: () => void }) {
+export function ShotDialog({ shot, frame, onClose }: { shot: GuestShot; frame: GuestFrame; onClose: () => void }) {
   const width = Math.min(320, typeof window !== "undefined" ? window.innerWidth - 48 : 320);
   return (
     <div className="guest-lightbox" role="dialog" aria-modal="true" aria-label="התמונה שלכם">

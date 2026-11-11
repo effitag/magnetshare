@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { createEvent, getAdminEvent, saveEventCover, updateEventDetails, type AdminEventDetail } from "@/services/api";
+import { parseTarget } from "@/lib/magnetTarget";
+import { createEvent, getAdminEvent, saveEventCover, updateEventDetails, type AdminEventDetail, type EventDraft } from "@/services/api";
 import { EventForm, type EventFormValue } from "./EventForm";
 import { ActivationSection } from "./ActivationSection";
 import { FrameSection } from "./frames/FrameSection";
 import { EventShare } from "./EventShare";
+import { EventCounter } from "./EventCounter";
 
-const empty: EventFormValue = { title: "", eventDate: "", printQuota: 2, eventType: null };
+const empty: EventFormValue = { title: "", eventDate: "", printQuota: 2, eventType: null, targetText: "" };
 
 export function EventEditorPage() {
   const { eventId } = useParams();
@@ -25,7 +27,13 @@ export function EventEditorPage() {
     getAdminEvent(eventId)
       .then((event) => {
         if (cancelled) return;
-        setForm({ title: event.title, eventDate: event.eventDate ?? "", printQuota: event.printQuota, eventType: event.eventType });
+        setForm({
+          title: event.title,
+          eventDate: event.eventDate ?? "",
+          printQuota: event.printQuota,
+          eventType: event.eventType,
+          targetText: event.magnetTarget ? String(event.magnetTarget) : "",
+        });
         setSaved(event);
         setCoverName(event.coverPath);
       })
@@ -42,6 +50,7 @@ export function EventEditorPage() {
     if (!form.eventType) return "בחרו סוג אירוע.";
     if (!form.eventDate) return "בחרו תאריך.";
     if (!Number.isInteger(form.printQuota) || form.printQuota < 1) return "לכל אורח מגיע לפחות מגנט אחד.";
+    if (parseTarget(form.targetText) === undefined) return "יעד המגנטים צריך להיות מספר שלם, או להישאר ריק.";
     return null;
   }
 
@@ -53,10 +62,17 @@ export function EventEditorPage() {
     }
     setPending(true);
     setError(null);
+    const draft: EventDraft = {
+      title: form.title,
+      eventDate: form.eventDate,
+      printQuota: form.printQuota,
+      eventType: form.eventType,
+      magnetTarget: parseTarget(form.targetText) ?? null,
+    };
     try {
       const next = eventId
-        ? await updateEventDetails(eventId, form)
-        : await createEvent(form);
+        ? await updateEventDetails(eventId, draft)
+        : await createEvent(draft);
       if (cover) await saveEventCover(next.id, cover);
       setSaved(next);
       setCover(null);
@@ -74,6 +90,14 @@ export function EventEditorPage() {
         חזרה לאירועים
       </Link>
       <h1 className="mt-2 font-display text-4xl leading-none text-ink">{eventId ? "האירוע" : "אירוע חדש"}</h1>
+      {saved && saved.status !== "draft" ? (
+        <EventCounter
+          eventId={saved.id}
+          status={saved.status}
+          target={saved.magnetTarget}
+          onClosed={() => setSaved((current) => (current ? { ...current, status: "closed" } : current))}
+        />
+      ) : null}
       <div className="mt-4">
         <EventForm
           value={form}

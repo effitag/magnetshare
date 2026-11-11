@@ -1,13 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { sentMagnets, targetBadge, targetLevel } from "@/lib/magnetTarget";
 import { listAdminEvents, type AdminEventRow } from "@/services/api";
+import type { MagnetCounts } from "@/services/types";
 import { EventList, type EventListItem } from "@/features/admin/EventList";
+import { useMagnetCounts } from "@/features/admin/events/useMagnetCounts";
 
-function toItem(row: AdminEventRow): EventListItem {
+function toItem(row: AdminEventRow, counts: Map<string, MagnetCounts> | null): EventListItem {
+  const mine = counts?.get(row.id);
+  const level = mine ? targetLevel(sentMagnets(mine), row.magnet_target) : "none";
   return {
     id: row.id,
     title: row.title,
     status: row.status,
+    badge: targetBadge(level),
+    badgeLevel: level,
     frameId: row.frame_id,
     framePublished: row.frame_published,
     portraitId: row.frame_portrait_id,
@@ -16,14 +23,22 @@ function toItem(row: AdminEventRow): EventListItem {
 }
 
 export function EventsPanel() {
-  const [events, setEvents] = useState<EventListItem[] | null>(null);
+  const [rows, setRows] = useState<AdminEventRow[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     listAdminEvents()
-      .then((rows) => setEvents(rows.map(toItem)))
+      .then(setRows)
       .catch((error: Error) => setMessage(error.message));
   }, []);
+
+  // Only events with a target can carry a badge. Read once, and again on return to the page.
+  const targeted = useMemo(
+    () => (rows ?? []).filter((row) => row.magnet_target && row.status !== "draft").map((row) => row.id),
+    [rows],
+  );
+  const { counts } = useMagnetCounts(targeted, { poll: false });
+  const events = useMemo(() => (rows ? rows.map((row) => toItem(row, counts)) : null), [rows, counts]);
 
   return (
     <section className="mx-auto w-full max-w-xl px-4 pt-6">

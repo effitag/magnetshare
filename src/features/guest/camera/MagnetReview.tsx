@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Trash2, WifiOff } from "lucide-react";
 import { blobToThumb } from "@/lib/cropToWindow";
+import { isEventClosedRefusal } from "@/lib/eventClosed";
 import type { SendRun, SendState } from "@/lib/sendRetry";
 import { FRAME_UPDATED } from "@/services/api";
 import { dropFromOutbox, saveToOutbox, sendFailureMessage, sendOutboxItem } from "../sendMagnet";
@@ -28,6 +29,8 @@ type Props = {
   overlayUrl: string | null;
   onRetake: () => void;
   onSent: () => Promise<void>;
+  /** The send was refused because the admin closed the event: the guest gets the thank-you screen. */
+  onEventClosed?: () => void;
 };
 
 export function MagnetReview({
@@ -41,6 +44,7 @@ export function MagnetReview({
   overlayUrl,
   onRetake,
   onSent,
+  onEventClosed,
 }: Props) {
   const [sending, setSending] = useState(false);
   const [state, setState] = useState<SendState>("sending");
@@ -86,6 +90,10 @@ export function MagnetReview({
     try {
       await run.done;
     } catch (cause) {
+      if (onEventClosed && isEventClosedRefusal(cause)) {
+        onEventClosed();
+        return;
+      }
       setError(sendFailureMessage(cause));
       setSending(false);
       return;

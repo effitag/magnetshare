@@ -9,6 +9,8 @@ export type EventFormValue = {
   eventDate: string;
   printQuota: number;
   eventType: EventType | null;
+  /** The magnet target as typed; empty means no target. */
+  targetText: string;
 };
 
 type Props = {
@@ -103,6 +105,19 @@ export function EventForm({ value, coverName, error, pending, onChange, onCover,
           inputMode="numeric"
           value={value.printQuota}
           onChange={(event) => onChange({ ...value, printQuota: Number(event.target.value) })}
+        />
+      </label>
+      <label className="flex min-w-0 flex-col gap-1 text-base text-ink">
+        יעד מגנטים
+        <span className="text-base text-ink">לא חובה. רק להתראה על מספר המגנטים באירוע, שום דבר לא נחסם.</span>
+        <input
+          className={fieldClass}
+          type="number"
+          min={1}
+          inputMode="numeric"
+          placeholder="למשל 300"
+          value={value.targetText}
+          onChange={(event) => onChange({ ...value, targetText: event.target.value })}
         />
       </label>
       {error ? (

@@ -5,13 +5,10 @@ const copy = {
     title: "האירוע לא זמין",
     line: "הקישור הזה עוד לא פותח אירוע. אם קיבלתם אותו עכשיו, נסו שוב בעוד רגע.",
   },
-  closed: {
-    title: "האירוע הסתיים",
-    line: "תודה שהייתם חלק מהרגע. אי אפשר להוסיף עוד תמונות לאירוע הזה.",
-  },
 } as const;
 
-export function GuestQuiet({ mode }: { mode: "missing" | "closed" }) {
+/** The event link opens no event. A closed event has its own thank-you screen (GuestClosed). */
+export function GuestQuiet({ mode }: { mode: "missing" }) {
   const text = copy[mode];
   return (
     <main className="guest-quiet">

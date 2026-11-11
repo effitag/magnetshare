@@ -98,3 +98,12 @@ export type PrintJob = {
   frame_id: string | null;
   storage_path: string | null;
 };
+
+/** Physical magnets (copies included) of one event, by status. */
+export type MagnetCounts = {
+  queued: number;
+  printing: number;
+  ready: number;
+  delivered: number;
+  rejected: number;
+};
