@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
+  SIGN_IN_WAIT,
   ensureGuestSession,
   getEventCardBySlug,
   getPublishedFrameWindow,
@@ -10,6 +11,7 @@ import {
 import type { PrintJob } from "@/services/types";
 import { GuestQuiet } from "../GuestQuiet";
 import { useOwnMagnets } from "../useOwnMagnets";
+import { useOutboxResume } from "../useOutboxResume";
 import { MagnetCamera, type CameraChoice } from "./MagnetCamera";
 
 type Ready = {
@@ -46,6 +48,7 @@ export function CameraPage() {
   const [ready, setReady] = useState<Ready | null>(null);
   const [note, setNote] = useState<"missing" | "closed" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [waiting, setWaiting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,7 +63,7 @@ export function CameraPage() {
           setNote("closed");
           return;
         }
-        const guestId = await ensureGuestSession();
+        const guestId = await ensureGuestSession({ onWait: () => setWaiting(true) });
         const [landscape, portrait, jobs] = await Promise.all([
           loadChoice(card.frame_id, card.screen_path),
           loadChoice(card.frame_portrait_id, card.screen_path_portrait),
@@ -84,7 +87,9 @@ export function CameraPage() {
 
   if (error) return <main className="guest-stage px-5 pt-10 text-base text-primary">{error}</main>;
   if (note) return <GuestQuiet mode={note} />;
-  if (!ready) return <main className="guest-stage px-5 pt-10 text-base text-ink">טוענים…</main>;
+  if (!ready) {
+    return <main className="guest-stage px-5 pt-10 text-base text-ink">{waiting ? SIGN_IN_WAIT : "טוענים…"}</main>;
+  }
 
   return (
     <CameraLive
@@ -121,6 +126,10 @@ function CameraLive({
   // send, on return to the page, and every ~20 s while a magnet is pending.
   const magnets = useOwnMagnets(eventId, jobs);
   const { refresh, catchUp } = magnets;
+  // A photo that a reload interrupted is sent in the background; the counter follows.
+  useOutboxResume(eventId, guestId, () => {
+    void refresh().catch(() => undefined);
+  });
 
   const refreshJobs = useCallback(async () => {
     await ensureGuestSession();

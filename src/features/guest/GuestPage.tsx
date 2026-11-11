@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { countMagnetsLeft, thumbPathFromPhoto } from "@/lib/magnets";
 import {
+  SIGN_IN_WAIT,
   ensureGuestSession,
   getEventCardBySlug,
   getPublishedFrameWindow,
@@ -13,6 +14,7 @@ import { inAppBrowser } from "./browser";
 import { GuestLanding, type GuestFrame } from "./GuestLanding";
 import type { GuestShot } from "./MagnetMeter";
 import { thumbUrls, useOwnMagnets } from "./useOwnMagnets";
+import { useOutboxResume } from "./useOutboxResume";
 
 function dateLabel(value: string | null): string | null {
   if (!value) return null;
@@ -57,6 +59,7 @@ async function shotsFrom(jobs: PrintJob[]): Promise<GuestShot[]> {
 
 type LiveEvent = {
   eventId: string;
+  guestId: string;
   quota: number;
   title: string;
   when: string | null;
@@ -72,6 +75,7 @@ export function GuestPage() {
   const [view, setView] = useState<"loading" | "missing" | "closed" | "live">("loading");
   const [live, setLive] = useState<LiveEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [waiting, setWaiting] = useState(false);
 
   useLayoutEffect(() => {
     const previous = window.history.scrollRestoration;
@@ -90,6 +94,7 @@ export function GuestPage() {
     setError(null);
     setView("loading");
     setLive(null);
+    setWaiting(false);
     getEventCardBySlug(slug)
       .then(async (card) => {
         if (cancelled) return;
@@ -101,7 +106,7 @@ export function GuestPage() {
           setView("closed");
           return;
         }
-        await ensureGuestSession();
+        const guestId = await ensureGuestSession({ onWait: () => setWaiting(true) });
         const [jobs, cover, land, port] = await Promise.all([
           listOwnPrintJobs(card.id).catch(() => [] as PrintJob[]),
           card.cover_path ? signedMediaUrl(card.cover_path, { width: 800, resize: "cover" }) : Promise.resolve(null),
@@ -112,6 +117,7 @@ export function GuestPage() {
         if (cancelled) return;
         setLive({
           eventId: card.id,
+          guestId,
           quota: card.print_quota,
           title: card.title,
           when: dateLabel(card.event_date),
@@ -135,7 +141,7 @@ export function GuestPage() {
     return <main className="guest-stage px-5 pt-10 text-base text-primary">{error}</main>;
   }
   if (view === "loading") {
-    return <main className="guest-stage px-5 pt-10 text-base text-ink">טוענים…</main>;
+    return <main className="guest-stage px-5 pt-10 text-base text-ink">{waiting ? SIGN_IN_WAIT : "טוענים…"}</main>;
   }
   if (view === "live" && live) {
     return <GuestLive key={live.eventId} event={live} cameraTo={`/e/${slug}/camera`} />;
@@ -158,7 +164,11 @@ export function GuestPage() {
 
 /** The live landing: the guest's magnets stay current through useOwnMagnets, without Realtime. */
 function GuestLive({ event, cameraTo }: { event: LiveEvent; cameraTo: string }) {
-  const { jobs } = useOwnMagnets(event.eventId, event.jobs);
+  const { jobs, refresh } = useOwnMagnets(event.eventId, event.jobs);
+  // A photo that a reload or a closed tab interrupted is sent now.
+  const notice = useOutboxResume(event.eventId, event.guestId, () => {
+    void refresh().catch(() => undefined);
+  });
   const [magnets, setMagnets] = useState(() => ({
     shots: event.shots,
     left: countMagnetsLeft(event.quota, event.jobs),
@@ -187,6 +197,7 @@ function GuestLive({ event, cameraTo }: { event: LiveEvent; cameraTo: string }) 
       portrait={event.portrait}
       inApp={inAppBrowser(navigator.userAgent)}
       cameraTo={cameraTo}
+      notice={notice}
     />
   );
 }

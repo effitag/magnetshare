@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { fetchWithTimeouts } from "@/lib/fetchTimeout";
 import { browserStore, createSessionStore } from "@/lib/sessionStore";
 
 const url = import.meta.env.VITE_SUPABASE_URL;
@@ -12,6 +13,8 @@ if (!url || !key) {
 export const AUTH_STORAGE_KEY = `sb-${new URL(url).hostname.split(".")[0]}-auth-token`;
 
 export const supabase = createClient(url, key, {
+  // Every request gives up after a set time instead of hanging. See fetchTimeout.ts.
+  global: { fetch: fetchWithTimeouts() },
   auth: {
     // One session per browser (localStorage), shared by every tab. See sessionStore.ts.
     storage: createSessionStore(browserStore("localStorage"), browserStore("sessionStorage")),

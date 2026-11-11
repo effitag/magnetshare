@@ -1,7 +1,8 @@
-import { AppError, toAppError } from "@/lib/errors";
+import { AppError, errorInfo, toAppError } from "@/lib/errors";
 import { isEventType, type EventType } from "@/lib/eventTypes";
-import { guestPhotoPaths, isAlreadyStored } from "@/lib/guestSend";
+import { isAlreadyStored } from "@/lib/guestSend";
 import { createGuestSignIn } from "@/lib/guestSession";
+import { retryTransient } from "@/lib/sendRetry";
 import { countMagnetsLeft, type FrameSlot } from "@/lib/magnets";
 import { supabase } from "@/lib/supabase";
 import { isFrameObjectPath } from "@/features/studio/storage/paths";
@@ -211,33 +212,19 @@ export const frameGateway = {
 };
 
 /**
- * Uploads one send to its fixed paths and returns the photo path. A retry of
- * the same send (same sendId) finds the files already there and goes on.
+ * Uploads one file of a send (photo or thumbnail) to its fixed path. A retry of
+ * the same send finds the file already there, which counts as stored.
  */
-export async function uploadGuestPhoto(
-  eventId: string,
-  guestId: string,
-  sendId: string,
-  photo: Blob,
-  thumb: Blob,
-): Promise<string> {
-  const paths = guestPhotoPaths(eventId, guestId, sendId);
-  if (paths.photo.split("/")[0] === "frames" || paths.photo.split("/")[0] === "events") {
+export async function uploadGuestFile(path: string, file: Blob): Promise<void> {
+  const top = path.split("/")[0];
+  if (top === "frames" || top === "events") {
     throw toAppError(new Error("reserved"), "אי אפשר לשמור קובץ של אורח בתיקייה הזו.");
   }
-  const thumbUpload = await supabase.storage.from("media").upload(paths.thumb, thumb, {
-    contentType: "image/webp",
-    upsert: false,
-  });
-  if (thumbUpload.error && !isAlreadyStored(thumbUpload.error)) {
-    throw toAppError(thumbUpload.error, "לא הצלחנו לשמור את התמונה. נסו שוב.");
-  }
-  const { error } = await supabase.storage.from("media").upload(paths.photo, photo, {
-    contentType: "image/jpeg",
+  const { error } = await supabase.storage.from("media").upload(path, file, {
+    contentType: file.type || "image/jpeg",
     upsert: false,
   });
   if (error && !isAlreadyStored(error)) throw toAppError(error, "לא הצלחנו לשמור את התמונה. נסו שוב.");
-  return paths.photo;
 }
 
 export type AdminEventRow = {
@@ -636,21 +623,45 @@ export async function countQueuedJobs(eventId: string, frameId: string): Promise
   return count ?? 0;
 }
 
+/** Waits before retrying a guest sign-in: about 2, 5 and 10 seconds. */
+const SIGN_IN_RETRY_DELAYS_MS = [2_000, 5_000, 10_000];
+const signInWaiters = new Set<() => void>();
+
 /** The guest of this browser: the stored session if there is one, otherwise one new anonymous guest for all tabs. */
 const ensureGuest = createGuestSignIn({
   currentUserId: async () => {
     const existing = await supabase.auth.getSession();
     return existing.data.session?.user?.id ?? null;
   },
-  signIn: async () => {
-    const signed = await supabase.auth.signInAnonymously();
-    if (signed.error || !signed.data.user) throw toAppError(signed.error, "לא הצלחנו לפתוח את האירוע. נסו שוב.");
-    return signed.data.user.id;
-  },
+  // At a venue every guest on the Wi-Fi shares one sign-in limit, so a busy
+  // moment (429) or a dropped connection is retried before giving up.
+  signIn: () =>
+    retryTransient(
+      async () => {
+        const signed = await supabase.auth.signInAnonymously();
+        if (signed.error || !signed.data.user) throw toAppError(signed.error, "לא הצלחנו לפתוח את האירוע. נסו שוב.");
+        return signed.data.user.id;
+      },
+      { delays: SIGN_IN_RETRY_DELAYS_MS, onWait: () => signInWaiters.forEach((wait) => wait()) },
+    ),
 });
 
-export async function ensureGuestSession(): Promise<string> {
-  return ensureGuest();
+/** Shown while a guest sign-in waits to retry. */
+export const SIGN_IN_WAIT = "הרבה אורחים נכנסים עכשיו, עוד רגע…";
+
+export async function ensureGuestSession(options: { onWait?: () => void } = {}): Promise<string> {
+  const onWait = options.onWait;
+  if (onWait) signInWaiters.add(onWait);
+  try {
+    return await ensureGuest();
+  } finally {
+    if (onWait) signInWaiters.delete(onWait);
+  }
+}
+
+/** Renews the guest's sign-in after the server said it expired. */
+export async function refreshGuestSession(): Promise<void> {
+  await supabase.auth.refreshSession();
 }
 
 export async function guestMagnetsLeft(eventId: string, quota: number): Promise<number> {
@@ -695,14 +706,16 @@ const PRINT_ERRORS: Record<string, string> = {
   storage_path_not_yours: "אפשר לשלוח רק תמונה שצילמתם כאן. חזרו לדף האירוע וצלמו שוב.",
   not_authenticated: "החיבור נותק. חזרו לדף האירוע ונסו שוב.",
   frame_not_in_event: FRAME_UPDATED,
+  photo_not_uploaded: "התמונה לא הגיעה לשרת. נסו שוב.",
 };
 
-function mapPrintError(error: unknown): AppError {
-  const message = error instanceof Error ? error.message : "";
+function mapPrintError(error: unknown, status?: number): AppError {
+  const message = typeof error === "object" && error !== null ? String((error as { message?: unknown }).message ?? "") : "";
+  const info = errorInfo(error, status);
   for (const [code, hebrew] of Object.entries(PRINT_ERRORS)) {
-    if (message.includes(code)) return new AppError(hebrew);
+    if (message.includes(code)) return new AppError(hebrew, { ...info, code });
   }
-  return toAppError(error, "לא הצלחנו לשלוח את התמונה. נסו שוב.");
+  return new AppError(toAppError(error, "לא הצלחנו לשלוח את התמונה. נסו שוב.").message, info);
 }
 
 export async function getPublishedFrameWindow(id: string): Promise<PublishedFrameWindow | null> {
@@ -740,15 +753,15 @@ export async function createGuestPrint(
     first.error &&
     /create_guest_print/.test(first.error.message) &&
     /schema cache|Could not find the function|PGRST202/.test(first.error.message);
-  const { data, error } = legacy
+  const result = legacy
     ? await supabase.rpc("create_guest_print", {
         p_event_id: eventId,
         p_storage_path: storagePath,
         p_copies: copies,
       })
     : first;
-  if (error) throw mapPrintError(error);
-  return data as string;
+  if (result.error) throw mapPrintError(result.error, result.status);
+  return result.data as string;
 }
 
 const JOB_COLUMNS =

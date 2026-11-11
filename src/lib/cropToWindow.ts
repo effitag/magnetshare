@@ -93,9 +93,29 @@ export function canvasToThumb(source: CanvasImageSource, width: number, height: 
   const context = canvas.getContext("2d");
   if (!context) return Promise.reject(new Error("canvas"));
   context.drawImage(source, 0, 0, canvas.width, canvas.height);
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("webp"))), "image/webp", 0.8);
-  });
+  return encodeThumb(
+    (type, quality) => new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality)),
+  );
+}
+
+/** Thumbnail quality for both WebP and the JPEG fallback. */
+export const THUMB_QUALITY = 0.8;
+
+/**
+ * WebP when the browser can encode it. iPhone browsers cannot: they quietly
+ * return a PNG (about 200 KB for a thumbnail), so the thumbnail is encoded as
+ * JPEG instead (about 30 KB). The file keeps its fixed name; its content type
+ * says which format it is.
+ */
+export async function encodeThumb(
+  encode: (type: string, quality: number) => Promise<Blob | null>,
+): Promise<Blob> {
+  const webp = await encode("image/webp", THUMB_QUALITY);
+  if (webp && webp.type === "image/webp") return webp;
+  const jpeg = await encode("image/jpeg", THUMB_QUALITY);
+  if (jpeg) return jpeg;
+  if (webp) return webp;
+  throw new Error("thumb");
 }
 
 export async function blobToThumb(blob: Blob, edge = 480): Promise<Blob> {
