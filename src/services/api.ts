@@ -706,7 +706,7 @@ const PRINT_ERRORS: Record<string, string> = {
   storage_path_not_yours: "אפשר לשלוח רק תמונה שצילמתם כאן. חזרו לדף האירוע וצלמו שוב.",
   not_authenticated: "החיבור נותק. חזרו לדף האירוע ונסו שוב.",
   frame_not_in_event: FRAME_UPDATED,
-  photo_not_uploaded: "התמונה לא הגיעה לשרת. נסו שוב.",
+  photo_not_uploaded: "התמונה לא נשלחה עד הסוף. נסו שוב.",
 };
 
 function mapPrintError(error: unknown, status?: number): AppError {

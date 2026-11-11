@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, Trash2, WifiOff } from "lucide-react";
 import { blobToThumb } from "@/lib/cropToWindow";
 import type { SendRun, SendState } from "@/lib/sendRetry";
 import { FRAME_UPDATED } from "@/services/api";
@@ -116,10 +116,22 @@ export function MagnetReview({
         </MagnetFrame>
         {sending ? (
           <div className="cam-progress" aria-live="polite">
-            <p className="font-display text-2xl text-ink">שולחים להדפסה</p>
-            <div className="cam-progress-track" role="progressbar" aria-label="שולחים להדפסה">
-              <span className="cam-progress-bar" />
-            </div>
+            {state === "offline" ? (
+              // Offline nothing moves, so no progress bar: a waiting state until the connection returns.
+              <>
+                <span className="cam-waiting-icon" aria-hidden="true">
+                  <WifiOff className="h-7 w-7" />
+                </span>
+                <p className="font-display text-2xl text-ink">ממתינים לחיבור</p>
+              </>
+            ) : (
+              <>
+                <p className="font-display text-2xl text-ink">שולחים להדפסה</p>
+                <div className="cam-progress-track" role="progressbar" aria-label="שולחים להדפסה">
+                  <span className="cam-progress-bar" />
+                </div>
+              </>
+            )}
             {line ? <p className="max-w-sm text-center text-base text-ink">{line}</p> : null}
             {state !== "sending" ? (
               <button type="button" className="cam-send" onClick={() => runRef.current?.retryNow()}>

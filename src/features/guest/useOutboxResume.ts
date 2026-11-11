@@ -5,7 +5,7 @@ import { sendOutboxItem } from "./sendMagnet";
 
 export const RESUME_SENDING = "שולחים את התמונה ששמרנו…";
 export const RESUME_SENT = "התמונה שלכם נשלחה";
-export const RESUME_LATER = "לא הצלחנו לשלוח את התמונה ששמרנו. ננסה שוב בפעם הבאה שתיכנסו.";
+export const RESUME_LATER = "לא הצלחנו לשלוח את התמונה ששמרנו. נמשיך לנסות כשתחזרו לעמוד.";
 
 /**
  * Finishes sends that a reload, a closed tab or a killed browser interrupted.

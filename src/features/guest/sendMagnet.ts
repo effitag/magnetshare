@@ -4,7 +4,7 @@ import { SendFailed, startSend, type SendEnv, type SendRun, type SendState } fro
 import { createGuestPrint, refreshGuestSession, uploadGuestFile } from "@/services/api";
 
 /** Shown when a send gave up after about 2 minutes of retries online. The photo stays on the phone. */
-export const SEND_EXHAUSTED = "לא הצלחנו לשלוח. התמונה שמורה, נסו שוב";
+export const SEND_EXHAUSTED = "לא הצלחנו לשלוח. התמונה שמורה אצלכם, נסו שוב.";
 
 function browserEnv(onState?: (state: SendState) => void): SendEnv {
   return {
