@@ -22,6 +22,8 @@ type Props = {
   landscape?: GuestFrame | null;
   portrait?: GuestFrame | null;
   inApp?: boolean;
+  /** A line about a saved photo being sent (outbox), shown under the event title. */
+  notice?: string | null;
   cameraTo?: string;
 };
 
@@ -45,6 +47,7 @@ export function GuestLanding({
   landscape = null,
   portrait = null,
   inApp = false,
+  notice = null,
   cameraTo,
 }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
@@ -63,7 +66,7 @@ export function GuestLanding({
           title={title}
           dateLabel={dateLabel}
           coverUrl={coverUrl}
-          note={inApp ? "כדי לצלם בנוחות, פתחו את הקישור בספארי או בכרום. אפשר גם להמשיך כאן." : null}
+          note={notice ?? (inApp ? "כדי לצלם בנוחות, פתחו את הקישור בספארי או בכרום. אפשר גם להמשיך כאן." : null)}
         />
         <div className="guest-body">
           <MagnetMeter left={magnetsLeft} shots={shots} onOpen={setOpenId} />

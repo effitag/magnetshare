@@ -6,11 +6,35 @@ function asError(error: unknown): ErrorLike {
   return {};
 }
 
+/** What the server or the network said, kept next to the Hebrew message so a send can decide whether to retry. */
+export type ErrorInfo = { code?: string; status?: number; detail?: string };
+
 export class AppError extends Error {
-  constructor(message: string) {
+  readonly code?: string;
+  readonly status?: number;
+  readonly detail?: string;
+
+  constructor(message: string, info: ErrorInfo = {}) {
     super(message);
     this.name = "AppError";
+    this.code = info.code;
+    this.status = info.status;
+    this.detail = info.detail;
   }
+}
+
+/** The code, HTTP status and raw text of a Supabase, Storage, Auth or network error. */
+export function errorInfo(error: unknown, status?: number): ErrorInfo {
+  if (error instanceof AppError) return { code: error.code, status: error.status ?? status, detail: error.detail };
+  if (typeof error !== "object" || error === null) {
+    return { status, detail: typeof error === "string" ? error : undefined };
+  }
+  const e = error as { code?: unknown; status?: unknown; statusCode?: unknown; name?: unknown; message?: unknown };
+  const code = typeof e.code === "string" && e.code ? e.code : typeof e.statusCode === "string" ? e.statusCode : undefined;
+  const ownStatus = typeof e.status === "number" ? e.status : undefined;
+  const name = typeof e.name === "string" ? e.name : "";
+  const message = typeof e.message === "string" ? e.message : "";
+  return { code, status: ownStatus ?? status, detail: [name, message].filter(Boolean).join(": ") || undefined };
 }
 
 export function isSchemaMissing(error: unknown): boolean {
@@ -60,5 +84,6 @@ export function toHebrewError(error: unknown, fallback: string): string {
 }
 
 export function toAppError(error: unknown, fallback: string): AppError {
-  return new AppError(toHebrewError(error, fallback));
+  if (error instanceof AppError) return error;
+  return new AppError(toHebrewError(error, fallback), errorInfo(error));
 }

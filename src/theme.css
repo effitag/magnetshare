@@ -892,6 +892,18 @@
   animation: cam-progress 1s ease-in-out infinite;
 }
 
+.cam-waiting-icon {
+  display: inline-flex;
+  width: 3.5rem;
+  height: 3.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid var(--color-ink);
+  border-radius: 999px;
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
 .cam-sent-card {
   position: relative;
   transform: rotate(-6deg);

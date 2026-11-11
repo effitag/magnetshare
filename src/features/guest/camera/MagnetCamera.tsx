@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "reac
 import { CameraOff, Film, Loader2, RotateCw, Upload, X, Zap, ZapOff } from "lucide-react";
 import { canvasToJpeg, cropCanvasToWindow, type WindowFrame } from "@/lib/cropToWindow";
 import { newSendId } from "@/lib/guestSend";
+import { retryTransient } from "@/lib/sendRetry";
 import { countMagnetsLeft } from "@/lib/magnets";
 import type { PrintJob } from "@/services/types";
 import { inAppBrowser } from "../browser";
@@ -616,9 +617,16 @@ export function MagnetCamera({
         overlayUrl={active.overlayUrl}
         onRetake={handleRetake}
         onSent={async () => {
-          const next = await onPrinted();
+          // The magnet exists. If reading the list fails, the sent screen still opens and the list
+          // is read again in the background.
+          let next: PrintJob[] | null = null;
+          try {
+            next = await onPrinted();
+          } catch {
+            void retryTransient(onPrinted, { delays: [2_000, 5_000, 10_000] }).catch(() => undefined);
+          }
           refreshGen.current += 1;
-          setServerJobs(next);
+          if (next) setServerJobs(next);
           setMode("sent");
         }}
       />

@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 // Guest send concurrency test. MagnetimShare Lab only. Not part of CI.
 //
-// Signs in anonymous guests and calls create_guest_print the way the guest
-// app does, many at the same moment. It only calls the RPC with paths: it
-// uploads no files and opens no Realtime connection, so the organization's
-// Realtime quota is not touched.
+// Signs in anonymous guests and sends the way the guest app does, many at the
+// same moment. Since migration 202611140001 the server only creates a magnet
+// whose photo file is in Storage, so each send first uploads a tiny JPEG (a
+// few hundred bytes) to its own path, then calls create_guest_print. It opens
+// no Realtime connection, so the organization's Realtime quota is not touched.
+// The test files stay in Lab Storage under the test event's folder: remove
+// them in the cleanup.
 //
 // Scenarios:
 //   many     N guests send at the same moment, for R rounds (one send each per round).
@@ -15,6 +18,8 @@
 //            paths outside their own folder: every one refused by guest_photos_path_own_folder
 //            (23514). One insert in their own folder is the control and goes through, which shows
 //            the refusals come from the constraint and not from RLS.
+//   nofile   A guest calls create_guest_print for a path it never uploaded: photo_not_uploaded,
+//            and no magnet.
 //
 // Every scenario reads each guest's own print_jobs back through RLS and checks
 // that no guest sees another guest's magnet.
@@ -23,7 +28,7 @@
 //   SUPABASE_URL=https://gexvrhhnmezkugldjjax.supabase.co \
 //   SUPABASE_ANON_KEY=<Lab publishable key> \
 //   node supabase/tests/send-concurrency.mjs --event <uuid> --frame <uuid> \
-//     [--guests 30] [--rounds 3] [--scenarios many,idem,quota,foreign,direct] [--label before]
+//     [--guests 30] [--rounds 3] [--scenarios many,idem,quota,foreign,direct,nofile] [--label before]
 //     [--out result.json] [--ids guest-ids.txt]
 //
 // --ids writes the id of every anonymous guest the run signed in, one per line, for the cleanup.
@@ -47,7 +52,12 @@ function fail(message) {
 }
 
 function parseArgs(argv) {
-  const args = { guests: 30, rounds: 3, scenarios: "many,idem,quota,foreign,direct", label: "run" };
+  const args = {
+    guests: 30,
+    rounds: 3,
+    scenarios: "many,idem,quota,foreign,direct,nofile",
+    label: "run",
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const key = argv[i];
     const value = argv[i + 1];
@@ -156,7 +166,39 @@ function photoPath(guest, sendId) {
 }
 
 /** One send, as the guest app calls it. Returns { ok, job, code, ms }. */
-async function send(guest, storagePath) {
+// The smallest valid JPEG (1x1 pixel).
+const TINY_JPEG = Buffer.from(
+  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/yQALCAABAAEBAREA/8wABgAQEAX/2gAIAQEAAD8A0s8g/9k=",
+  "base64",
+);
+let uploads = 0;
+
+/** Uploads the tiny JPEG to the guest's own path. "Already exists" counts as stored, as in the app. */
+async function upload(guest, storagePath) {
+  uploads += 1;
+  const result = await call(`/storage/v1/object/media/${storagePath}`, {
+    method: "POST",
+    headers: {
+      apikey: KEY,
+      authorization: `Bearer ${guest.token}`,
+      "content-type": "image/jpeg",
+      "x-upsert": "false",
+    },
+    body: TINY_JPEG,
+  });
+  const exists =
+    result.body && typeof result.body === "object" && String(result.body.statusCode) === "409";
+  return result.status === 200 || exists;
+}
+
+/** One send: upload the photo to its own path (when it is the guest's own), then create the magnet. */
+async function send(guest, storagePath, { uploadFirst = true } = {}) {
+  const own = new RegExp(`^${args.event}/${guest.id}/[A-Za-z0-9][A-Za-z0-9._-]*$`).test(
+    storagePath,
+  );
+  if (uploadFirst && own && !(await upload(guest, storagePath))) {
+    return { ok: false, job: null, code: "upload_failed", status: 0, ms: 0 };
+  }
   const result = await call("/rest/v1/rpc/create_guest_print", {
     method: "POST",
     headers: {
@@ -184,6 +226,7 @@ function errorCode(result) {
     "print_quota_exceeded",
     "storage_path_not_yours",
     "invalid_storage_path",
+    "photo_not_uploaded",
     "event_not_live",
     "event_not_found",
     "frame_not_in_event",
@@ -391,21 +434,33 @@ async function direct(owner, intruder) {
   };
 }
 
+async function nofile(guest) {
+  const before = (await ownJobs(guest)).jobs.length;
+  const code = (await send(guest, photoPath(guest, randomUUID()), { uploadFirst: false })).code;
+  const after = (await ownJobs(guest)).jobs.length;
+  return {
+    result: code,
+    new_magnets: after - before,
+    pass: code === "photo_not_uploaded" && after === before,
+  };
+}
+
 const report = {
   label: args.label,
   started_at: new Date().toISOString(),
   target: LAB_REF,
   event: args.event,
   realtime_connections: 0,
-  uploads: 0,
 };
-const needsGuests = ["many", "foreign", "direct"].some((name) => scenarios.has(name));
+const needsGuests = ["many", "foreign", "direct", "nofile"].some((name) => scenarios.has(name));
 const guests = needsGuests ? await signInGuests(args.guests) : [];
 if (scenarios.has("many")) report.many = await many(guests);
 if (scenarios.has("idem")) report.idem = await idem();
 if (scenarios.has("quota")) report.quota = await quota();
 if (scenarios.has("foreign")) report.foreign = await foreign(guests[0], guests[1]);
 if (scenarios.has("direct")) report.direct = await direct(guests[0], guests[1]);
+if (scenarios.has("nofile")) report.nofile = await nofile(guests[0]);
+report.uploads = uploads;
 report.anonymous_sign_ins = signIns;
 report.finished_at = new Date().toISOString();
 
