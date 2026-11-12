@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { PRINT_STATUS_LABEL } from "@/lib/magnets";
+import { copiesMark, PRINT_STATUS_LABEL } from "@/lib/magnets";
 import { MagnetFrame, type CameraFrame } from "./camera/MagnetFrame";
 import { GuestHero } from "./GuestHero";
 import { GuestQuiet } from "./GuestQuiet";
@@ -98,7 +98,10 @@ export function ShotDialog({ shot, frame, onClose }: { shot: GuestShot; frame: G
         <MagnetFrame frame={frame.frame} overlayUrl={frame.overlayUrl} width={width}>
           {shot.url ? <img src={shot.url} alt="" className="absolute inset-0 h-full w-full object-cover" /> : null}
         </MagnetFrame>
-        <p className={`magnet-sticker${shot.status === "rejected" ? " is-rejected" : ""}`}>{PRINT_STATUS_LABEL[shot.status]}</p>
+        <p className={`magnet-sticker${shot.status === "rejected" ? " is-rejected" : ""}`}>
+          {PRINT_STATUS_LABEL[shot.status]}
+          {copiesMark(shot.copies) ? ` · ${copiesMark(shot.copies)}` : null}
+        </p>
       </div>
     </div>
   );

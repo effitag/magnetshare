@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Trash2, WifiOff } from "lucide-react";
+import { Loader2, Minus, Plus, Trash2, WifiOff } from "lucide-react";
 import { blobToThumb } from "@/lib/cropToWindow";
 import { isEventClosedRefusal } from "@/lib/eventClosed";
+import { clampCopies } from "@/lib/magnets";
 import type { SendRun, SendState } from "@/lib/sendRetry";
 import { FRAME_UPDATED } from "@/services/api";
 import { dropFromOutbox, saveToOutbox, sendFailureMessage, sendOutboxItem } from "../sendMagnet";
@@ -27,8 +28,11 @@ type Props = {
   frameId: string;
   frame: CameraFrame;
   overlayUrl: string | null;
+  /** Most magnets the guest may order from this photo. 1 hides the choice. */
+  maxCopies: number;
   onRetake: () => void;
-  onSent: () => Promise<void>;
+  /** The magnet exists; copies is the number the guest ordered. */
+  onSent: (copies: number) => Promise<void>;
   /** The send was refused because the admin closed the event: the guest gets the thank-you screen. */
   onEventClosed?: () => void;
 };
@@ -42,10 +46,13 @@ export function MagnetReview({
   frameId,
   frame,
   overlayUrl,
+  maxCopies,
   onRetake,
   onSent,
   onEventClosed,
 }: Props) {
+  const [copies, setCopies] = useState(1);
+  const canChoose = clampCopies(maxCopies, maxCopies) > 1;
   const [sending, setSending] = useState(false);
   const [state, setState] = useState<SendState>("sending");
   const [slow, setSlow] = useState(false);
@@ -78,7 +85,7 @@ export function MagnetReview({
       eventId,
       guestId,
       frameId,
-      copies: 1,
+      copies: clampCopies(copies, maxCopies),
       photo: blob,
       thumb: thumbRef.current,
       savedAt: Date.now(),
@@ -103,7 +110,8 @@ export function MagnetReview({
     // The magnet exists: the send succeeded, even if reading the list afterwards fails.
     if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
     try {
-      await onSent();
+      // A retry of the same photo returns the magnet the server already made, with its first number of copies.
+      await onSent(clampCopies(copies, maxCopies));
     } catch {
       // The sent screen and the list catch up on their own.
     }
@@ -148,6 +156,37 @@ export function MagnetReview({
             ) : null}
           </div>
         ) : (
+          <>
+          {canChoose ? (
+            <div className="cam-copies" role="group" aria-labelledby="cam-copies-label">
+              <p id="cam-copies-label" className="text-lg text-ink">
+                כמה מגנטים מהתמונה הזו?
+              </p>
+              <div className="cam-copies-row">
+                <button
+                  type="button"
+                  className="cam-copies-step"
+                  aria-label="מגנט אחד פחות"
+                  disabled={copies <= 1}
+                  onClick={() => setCopies((value) => clampCopies(value - 1, maxCopies))}
+                >
+                  <Minus className="h-5 w-5" aria-hidden="true" />
+                </button>
+                <output className="cam-copies-value" aria-live="polite">
+                  {copies}
+                </output>
+                <button
+                  type="button"
+                  className="cam-copies-step"
+                  aria-label="עוד מגנט"
+                  disabled={copies >= clampCopies(maxCopies, maxCopies)}
+                  onClick={() => setCopies((value) => clampCopies(value + 1, maxCopies))}
+                >
+                  <Plus className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          ) : null}
           <div className="cam-actions">
             <button type="button" onClick={retake} className="cam-retake">
               <Trash2 className="h-5 w-5" aria-hidden="true" />
@@ -157,6 +196,7 @@ export function MagnetReview({
               שלחו להדפסה
             </button>
           </div>
+          </>
         )}
         {error ? (
           <p className="max-w-sm text-center text-base text-primary" role="alert">

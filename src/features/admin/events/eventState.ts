@@ -47,7 +47,7 @@ export function activationChecklist(event: ActivationInput): ChecklistItem[] {
     event.title.trim() ? null : "שם",
     event.eventDate ? null : "תאריך",
     event.eventType ? null : "סוג אירוע",
-    Number.isInteger(event.printQuota) && event.printQuota >= 1 ? null : "מגנטים לאורח",
+    Number.isInteger(event.printQuota) && event.printQuota >= 1 ? null : "תמונות לאורח",
   ].filter((value): value is string => Boolean(value));
   return [
     { id: "details", label: "פרטים", ok: missingDetails.length === 0, missing: `חסר: ${missingDetails.join(", ")}` },

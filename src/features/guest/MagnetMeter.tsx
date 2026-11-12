@@ -1,4 +1,4 @@
-import { magnetLine, PRINT_STATUS_LABEL } from "@/lib/magnets";
+import { copiesMark, photoLine, PRINT_STATUS_LABEL } from "@/lib/magnets";
 import type { PrintJobStatus } from "@/services/types";
 
 export type GuestShot = {
@@ -6,6 +6,8 @@ export type GuestShot = {
   url: string | null;
   status: PrintJobStatus;
   frameId: string | null;
+  /** Magnets ordered from this photo. */
+  copies: number;
 };
 
 type Props = {
@@ -38,6 +40,11 @@ export function MagnetMeter({ left, shots = [], onOpen, readOnly = false }: Prop
               onClick={() => onOpen?.(shot.id)}
             >
               {shot.url ? <img src={shot.url} alt="" /> : <span className="magnet-photo-empty" />}
+              {copiesMark(shot.copies) ? (
+                <span className="magnet-copies" aria-label={`${shot.copies} מגנטים מהתמונה`}>
+                  {copiesMark(shot.copies)}
+                </span>
+              ) : null}
               <span className="magnet-sticker">{PRINT_STATUS_LABEL[shot.status]}</span>
             </button>
           </li>
@@ -48,7 +55,7 @@ export function MagnetMeter({ left, shots = [], onOpen, readOnly = false }: Prop
           </li>
         ))}
       </ul>
-      {readOnly ? null : <p className="mt-2 text-base text-ink">{magnetLine(count)}</p>}
+      {readOnly ? null : <p className="mt-2 text-base text-ink">{photoLine(count)}</p>}
     </div>
   );
 }

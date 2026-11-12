@@ -526,6 +526,24 @@
   text-align: center;
 }
 
+.guest-magnet-row .magnet-copies {
+  position: absolute;
+  z-index: 1;
+  top: 0.35rem;
+  inset-inline-start: 0.35rem;
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  padding: 0.05rem 0.45rem;
+  border: 2px solid var(--color-ink);
+  border-radius: 999px;
+  background: var(--color-sticker);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  line-height: 1;
+}
+
 .guest-magnet-row .magnet-empty {
   display: block;
   border: 3px dashed var(--color-ink);
@@ -863,6 +881,46 @@
   justify-content: center;
   gap: 1rem;
   padding: calc(env(safe-area-inset-top, 0px) + 1rem) 1.25rem calc(env(safe-area-inset-bottom, 0px) + 5.5rem);
+  text-align: center;
+}
+
+/* Copies of one photo, on the review screen. Shown only when the event allows more than 1. */
+.cam-copies {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.cam-copies-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.cam-copies-step {
+  display: flex;
+  width: 3rem;
+  height: 3rem;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid var(--color-ink);
+  border-radius: 999px;
+  background: var(--color-sticker);
+  color: var(--color-ink);
+  box-shadow: 2px 2px 0 var(--color-ink);
+}
+
+.cam-copies-step:disabled {
+  opacity: 0.35;
+  box-shadow: none;
+}
+
+.cam-copies-value {
+  min-width: 2.5rem;
+  font-family: var(--font-display);
+  font-size: 2rem;
+  line-height: 1;
   text-align: center;
 }
 

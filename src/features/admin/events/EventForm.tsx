@@ -11,7 +11,11 @@ export type EventFormValue = {
   eventType: EventType | null;
   /** The magnet target as typed; empty means no target. */
   targetText: string;
+  /** Most magnets a guest may order from one photo, 1 to 5. */
+  maxCopies: number;
 };
+
+const COPY_CHOICES = [1, 2, 3, 4, 5] as const;
 
 type Props = {
   value: EventFormValue;
@@ -97,7 +101,8 @@ export function EventForm({ value, coverName, error, pending, onChange, onCover,
         {!preview && coverName ? <span>נשמרה תמונה</span> : null}
       </label>
       <label className="flex min-w-0 flex-col gap-1 text-base text-ink">
-        מגנטים לאורח
+        תמונות לאורח
+        <span className="text-base text-ink">כמה תמונות כל אורח יכול לשלוח</span>
         <input
           className={fieldClass}
           type="number"
@@ -107,6 +112,30 @@ export function EventForm({ value, coverName, error, pending, onChange, onCover,
           onChange={(event) => onChange({ ...value, printQuota: Number(event.target.value) })}
         />
       </label>
+      <fieldset className="flex min-w-0 flex-col gap-2 text-base text-ink">
+        <legend className="mb-1">מקסימום עותקים לתמונה</legend>
+        <span className="text-base text-ink">1 אומר מגנט אחד מכל תמונה, בלי בחירה</span>
+        <div className="flex flex-wrap gap-2">
+          {COPY_CHOICES.map((count) => (
+            <label
+              key={count}
+              className={`inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-full border-[3px] border-ink px-4 text-base has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 ${
+                value.maxCopies === count ? "bg-pop" : "bg-sticker"
+              }`}
+            >
+              <input
+                type="radio"
+                name="max-copies"
+                className="sr-only"
+                value={count}
+                checked={value.maxCopies === count}
+                onChange={() => onChange({ ...value, maxCopies: count })}
+              />
+              {count}
+            </label>
+          ))}
+        </div>
+      </fieldset>
       <label className="flex min-w-0 flex-col gap-1 text-base text-ink">
         יעד מגנטים
         <span className="text-base text-ink">לא חובה. רק להתראה על מספר המגנטים באירוע, שום דבר לא נחסם.</span>

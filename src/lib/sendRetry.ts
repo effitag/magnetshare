@@ -19,6 +19,7 @@ const STOP_CODES = [
   "storage_path_not_yours",
   "invalid_storage_path",
   "invalid_copies",
+  "too_many_copies",
 ];
 
 type Failure = {

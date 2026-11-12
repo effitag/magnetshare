@@ -1,4 +1,4 @@
-import { countMagnetsLeft, magnetLine, newestJob, PRINT_STATUS_LABEL } from "@/lib/magnets";
+import { countPhotosLeft, countPhotosUsed, newestJob, photoLine, PRINT_STATUS_LABEL, sentTitle } from "@/lib/magnets";
 import type { PrintJob } from "@/services/types";
 import { MagnetIcons } from "../MagnetMeter";
 import { MagnetFrame, type CameraFrame } from "./MagnetFrame";
@@ -6,6 +6,8 @@ import { MagnetFrame, type CameraFrame } from "./MagnetFrame";
 type Props = {
   jobs: PrintJob[];
   quota: number;
+  /** Magnets ordered from the photo just sent. */
+  copies: number;
   photoUrl: string;
   frame: CameraFrame;
   overlayUrl: string | null;
@@ -13,11 +15,9 @@ type Props = {
   onClose: () => void;
 };
 
-export function PrintStatus({ jobs, quota, photoUrl, frame, overlayUrl, onAgain, onClose }: Props) {
-  const left = countMagnetsLeft(quota, jobs);
-  const used = jobs
-    .filter((job) => job.status !== "rejected")
-    .reduce((sum, job) => sum + Number(job.copies ?? 0), 0);
+export function PrintStatus({ jobs, quota, copies, photoUrl, frame, overlayUrl, onAgain, onClose }: Props) {
+  const left = countPhotosLeft(quota, jobs);
+  const used = countPhotosUsed(jobs);
   const latest = newestJob(jobs);
   const width = Math.min(280, typeof window !== "undefined" ? window.innerWidth - 72 : 280);
 
@@ -30,14 +30,14 @@ export function PrintStatus({ jobs, quota, photoUrl, frame, overlayUrl, onAgain,
           </MagnetFrame>
           {latest ? <p className="magnet-sticker">{PRINT_STATUS_LABEL[latest.status]}</p> : null}
         </div>
-        <h1 className="font-display text-4xl leading-none text-ink">המגנט בדרך אליכם!</h1>
+        <h1 className="font-display text-4xl leading-none text-ink">{sentTitle(copies)}</h1>
         {left > 0 ? (
           <>
             <MagnetIcons used={used} left={left} />
-            <p className="text-base text-ink">{magnetLine(left)}</p>
+            <p className="text-base text-ink">{photoLine(left)}</p>
           </>
         ) : (
-          <p className="text-base text-ink">ניצלתם את כל המגנטים, תודה!</p>
+          <p className="text-base text-ink">{photoLine(0)}</p>
         )}
       </div>
       <div className="cam-dock">

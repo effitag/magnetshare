@@ -3,7 +3,7 @@ import { isEventType, type EventType } from "@/lib/eventTypes";
 import { isAlreadyStored } from "@/lib/guestSend";
 import { createGuestSignIn } from "@/lib/guestSession";
 import { retryTransient } from "@/lib/sendRetry";
-import { countMagnetsLeft, type FrameSlot } from "@/lib/magnets";
+import { countPhotosLeft, type FrameSlot } from "@/lib/magnets";
 import { supabase } from "@/lib/supabase";
 import { isFrameObjectPath } from "@/features/studio/storage/paths";
 import type { EventCard, Frame, MagnetCounts, NewLeadInput, PrintJob, PrintJobStatus } from "@/services/types";
@@ -251,6 +251,8 @@ export type AdminEventDetail = {
   status: "draft" | "live" | "closed";
   /** Optional target in physical magnets, for the counter only. */
   magnetTarget: number | null;
+  /** Most magnets a guest may order from one photo, 1 to 5. */
+  maxCopies: number;
 };
 
 export type EventDraft = {
@@ -261,36 +263,62 @@ export type EventDraft = {
   eventType?: EventType | null;
   /** Left out: the target is not changed. Null: no target. */
   magnetTarget?: number | null;
+  /** Left out: not changed. 1 means one magnet per photo. */
+  maxCopies?: number;
 };
 
 function eventTypeColumn(draft: EventDraft): { event_type?: EventType | null } {
   return draft.eventType === undefined ? {} : { event_type: draft.eventType };
 }
 
-function magnetTargetColumn(draft: EventDraft): { magnet_target?: number | null } {
-  return draft.magnetTarget === undefined ? {} : { magnet_target: draft.magnetTarget };
+type NewColumns = { magnet_target?: number | null; max_copies?: number };
+
+function newColumns(draft: EventDraft): NewColumns {
+  return {
+    ...(draft.magnetTarget === undefined ? {} : { magnet_target: draft.magnetTarget }),
+    ...(draft.maxCopies === undefined ? {} : { max_copies: draft.maxCopies }),
+  };
 }
 
 const TARGET_NOT_READY = "היעד יישמר אחרי עדכון המערכת. שאר הפרטים לא נשמרו, נסו שוב בלי יעד.";
+const COPIES_NOT_READY = "עותקים לתמונה יישמרו אחרי עדכון המערכת. שאר הפרטים לא נשמרו, נסו שוב עם עותק אחד.";
 
 /**
- * Until the target migration runs, the database has no magnet_target column.
- * A save without a target then goes through without it; a save with one is
- * refused with a clear message instead of losing the target silently.
+ * Until a migration runs, the database lacks its column (magnet_target or
+ * max_copies). A save that leaves it at its default then goes through without
+ * it; a save that sets it is refused with a clear message instead of losing
+ * the value silently.
  */
-async function withTargetColumn<T extends { error: { message?: string } | null }>(
+async function withNewColumns<T extends { error: { message?: string } | null }>(
   draft: EventDraft,
-  run: (columns: { magnet_target?: number | null }) => PromiseLike<T>,
+  run: (columns: NewColumns) => PromiseLike<T>,
 ): Promise<T> {
-  const first = await run(magnetTargetColumn(draft));
-  if (!first.error || !missingColumn(first.error, "magnet_target")) return first;
-  if (draft.magnetTarget) throw new Error(TARGET_NOT_READY);
-  return run({});
+  const columns = newColumns(draft);
+  for (;;) {
+    const result = await run(columns);
+    if (!result.error) return result;
+    if (missingColumn(result.error, "magnet_target") && "magnet_target" in columns) {
+      if (columns.magnet_target) throw new Error(TARGET_NOT_READY);
+      delete columns.magnet_target;
+      continue;
+    }
+    if (missingColumn(result.error, "max_copies") && "max_copies" in columns) {
+      if ((columns.max_copies ?? 1) > 1) throw new Error(COPIES_NOT_READY);
+      delete columns.max_copies;
+      continue;
+    }
+    return result;
+  }
 }
 
 function readTarget(row: { magnet_target?: unknown }): number | null {
   const value = Number(row.magnet_target);
   return row.magnet_target != null && Number.isInteger(value) && value > 0 ? value : null;
+}
+
+function readMaxCopies(row: { max_copies?: unknown }): number {
+  const value = Number(row.max_copies);
+  return Number.isInteger(value) && value >= 1 && value <= 5 ? value : 1;
 }
 
 export async function listAdminEvents(): Promise<AdminEventRow[]> {
@@ -382,7 +410,16 @@ function readEventType(row: { event_type?: unknown }): EventType | null {
 
 export async function getAdminEvent(id: string): Promise<AdminEventDetail> {
   const columns = "id, slug, title, event_date, print_quota, cover_path, status";
-  const withTarget = await supabase.from("events").select(`${columns}, event_type, magnet_target`).eq("id", id).single();
+  const withCopies = await supabase
+    .from("events")
+    .select(`${columns}, event_type, magnet_target, max_copies`)
+    .eq("id", id)
+    .single();
+  // Until the copies migration runs, read the event without max_copies.
+  const withTarget =
+    withCopies.error && missingColumn(withCopies.error, "max_copies")
+      ? await supabase.from("events").select(`${columns}, event_type, magnet_target`).eq("id", id).single()
+      : withCopies;
   // Until the target migration runs, read the event without its target.
   const first =
     withTarget.error && missingColumn(withTarget.error, "magnet_target")
@@ -403,11 +440,12 @@ export async function getAdminEvent(id: string): Promise<AdminEventDetail> {
     eventType: readEventType(data as { event_type?: unknown }),
     status: data.status as AdminEventDetail["status"],
     magnetTarget: readTarget(data as { magnet_target?: unknown }),
+    maxCopies: readMaxCopies(data as { max_copies?: unknown }),
   };
 }
 
 async function insertEvent(draft: EventDraft, slug: string): Promise<AdminEventDetail> {
-  const { data, error } = await withTargetColumn(draft, (target) =>
+  const { data, error } = await withNewColumns(draft, (target) =>
     supabase
       .from("events")
       .insert({
@@ -437,6 +475,7 @@ async function insertEvent(draft: EventDraft, slug: string): Promise<AdminEventD
     eventType: draft.eventType ?? null,
     status: "draft",
     magnetTarget: draft.magnetTarget ?? null,
+    maxCopies: draft.maxCopies ?? 1,
   };
 }
 
@@ -453,7 +492,7 @@ export async function createEvent(draft: EventDraft): Promise<AdminEventDetail> 
 }
 
 export async function updateEventDetails(eventId: string, draft: EventDraft): Promise<AdminEventDetail> {
-  const { data, error } = await withTargetColumn(draft, (target) =>
+  const { data, error } = await withNewColumns(draft, (target) =>
     supabase
       .from("events")
       .update({
@@ -477,14 +516,15 @@ export async function updateEventDetails(eventId: string, draft: EventDraft): Pr
     printQuota: draft.printQuota,
     coverPath: (data.cover_path as string | null) ?? null,
   };
-  if (draft.eventType !== undefined && draft.magnetTarget !== undefined) {
-    return { ...saved, eventType: draft.eventType, magnetTarget: draft.magnetTarget };
+  if (draft.eventType !== undefined && draft.magnetTarget !== undefined && draft.maxCopies !== undefined) {
+    return { ...saved, eventType: draft.eventType, magnetTarget: draft.magnetTarget, maxCopies: draft.maxCopies };
   }
   const stored = await getAdminEvent(eventId);
   return {
     ...saved,
     eventType: draft.eventType !== undefined ? draft.eventType : stored.eventType,
     magnetTarget: draft.magnetTarget !== undefined ? draft.magnetTarget : stored.magnetTarget,
+    maxCopies: draft.maxCopies !== undefined ? draft.maxCopies : stored.maxCopies,
   };
 }
 
@@ -764,7 +804,7 @@ export async function refreshGuestSession(): Promise<void> {
 
 export async function guestMagnetsLeft(eventId: string, quota: number): Promise<number> {
   const jobs = await listOwnPrintJobs(eventId);
-  return countMagnetsLeft(quota, jobs);
+  return countPhotosLeft(quota, jobs);
 }
 
 export async function signedMediaUrl(
@@ -796,10 +836,11 @@ export type PublishedFrameWindow = {
 export const FRAME_UPDATED = "המסגרת של האירוע עודכנה בינתיים. צלמו שוב במסגרת החדשה.";
 
 const PRINT_ERRORS: Record<string, string> = {
-  print_quota_exceeded: "נגמרו המגנטים שלכם לאירוע הזה.",
+  print_quota_exceeded: "נגמרו התמונות שלכם לאירוע הזה.",
   event_not_found: "האירוע לא נמצא.",
   event_not_live: "האירוע לא פתוח לצילום.",
   invalid_copies: "מספר העותקים לא תקין.",
+  too_many_copies: "האירוע מאפשר פחות מגנטים מכל תמונה. בחרו מספר קטן יותר ונסו שוב.",
   invalid_storage_path: "לא הצלחנו לשמור את התמונה במקום הנכון.",
   storage_path_not_yours: "אפשר לשלוח רק תמונה שצילמתם כאן. חזרו לדף האירוע וצלמו שוב.",
   not_authenticated: "החיבור נותק. חזרו לדף האירוע ונסו שוב.",

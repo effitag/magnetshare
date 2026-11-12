@@ -75,6 +75,8 @@ export type EventCard = {
   cover_path: string | null;
   screen_path: string | null;
   screen_path_portrait: string | null;
+  /** Most magnets per photo (1 to 5). Missing until the copies migration runs. */
+  max_copies?: number;
 };
 
 export type GuestPhoto = {

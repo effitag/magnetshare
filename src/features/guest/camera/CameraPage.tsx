@@ -18,6 +18,7 @@ import { MagnetCamera, type CameraChoice } from "./MagnetCamera";
 type Ready = {
   eventId: string;
   quota: number;
+  maxCopies: number;
   guestId: string;
   landscape: CameraChoice | null;
   portrait: CameraChoice | null;
@@ -76,7 +77,16 @@ export function CameraPage() {
           setNote("missing");
           return;
         }
-        const next: Ready = { eventId: card.id, quota: card.print_quota, guestId, landscape, portrait, jobs };
+        const next: Ready = {
+          eventId: card.id,
+          quota: card.print_quota,
+          // Until the copies migration runs, the card has no max_copies: one magnet per photo.
+          maxCopies: card.max_copies ?? 1,
+          guestId,
+          landscape,
+          portrait,
+          jobs,
+        };
         setReady(next);
       })
       .catch((cause: Error) => {
@@ -98,6 +108,7 @@ export function CameraPage() {
       key={ready.eventId}
       eventId={ready.eventId}
       quota={ready.quota}
+      maxCopies={ready.maxCopies}
       guestId={ready.guestId}
       landscape={ready.landscape}
       portrait={ready.portrait}
@@ -112,6 +123,7 @@ export function CameraPage() {
 function CameraLive({
   eventId,
   quota,
+  maxCopies,
   guestId,
   landscape,
   portrait,
@@ -122,6 +134,7 @@ function CameraLive({
 }: {
   eventId: string;
   quota: number;
+  maxCopies: number;
   guestId: string;
   landscape: CameraChoice | null;
   portrait: CameraChoice | null;
@@ -151,6 +164,7 @@ function CameraLive({
       eventId={eventId}
       guestId={guestId}
       quota={quota}
+      maxCopies={maxCopies}
       landscape={landscape}
       portrait={portrait}
       jobs={magnets.jobs}

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { countMagnetsLeft, thumbPathFromPhoto } from "@/lib/magnets";
+import { countPhotosLeft, thumbPathFromPhoto } from "@/lib/magnets";
 import {
   SIGN_IN_WAIT,
   currentGuestId,
@@ -55,7 +55,7 @@ async function shotsFrom(jobs: PrintJob[]): Promise<GuestShot[]> {
     ordered.map(async (job) => {
       const path = job.storage_path ? thumbPathFromPhoto(job.storage_path) : null;
       const url = path ? await thumbUrls.get(path) : null;
-      return { id: job.id, url, status: job.status, frameId: job.frame_id };
+      return { id: job.id, url, status: job.status, frameId: job.frame_id, copies: Number(job.copies) || 1 };
     }),
   );
 }
@@ -262,14 +262,14 @@ function GuestLive({
   });
   const [magnets, setMagnets] = useState(() => ({
     shots: event.shots,
-    left: countMagnetsLeft(event.quota, event.jobs),
+    left: countPhotosLeft(event.quota, event.jobs),
   }));
 
   useEffect(() => {
     if (jobs === event.jobs) return;
     let cancelled = false;
     void shotsFrom(jobs).then((shots) => {
-      if (!cancelled) setMagnets({ shots, left: countMagnetsLeft(event.quota, jobs) });
+      if (!cancelled) setMagnets({ shots, left: countPhotosLeft(event.quota, jobs) });
     });
     return () => {
       cancelled = true;

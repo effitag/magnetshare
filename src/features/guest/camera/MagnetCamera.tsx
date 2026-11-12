@@ -3,7 +3,7 @@ import { CameraOff, Film, Loader2, RotateCw, Upload, X, Zap, ZapOff } from "luci
 import { canvasToJpeg, cropCanvasToWindow, type WindowFrame } from "@/lib/cropToWindow";
 import { newSendId } from "@/lib/guestSend";
 import { retryTransient } from "@/lib/sendRetry";
-import { countMagnetsLeft } from "@/lib/magnets";
+import { countPhotosLeft } from "@/lib/magnets";
 import type { PrintJob } from "@/services/types";
 import { inAppBrowser } from "../browser";
 import { FrameViewfinder } from "./FrameViewfinder";
@@ -69,6 +69,8 @@ type Props = {
   eventId: string;
   guestId: string;
   quota: number;
+  /** Most magnets the guest may order from one photo (1 = no choice). */
+  maxCopies: number;
   landscape: CameraChoice | null;
   portrait: CameraChoice | null;
   jobs: PrintJob[];
@@ -83,6 +85,7 @@ export function MagnetCamera({
   eventId,
   guestId,
   quota,
+  maxCopies,
   landscape,
   portrait,
   jobs,
@@ -130,11 +133,13 @@ export function MagnetCamera({
     return landscape ? "landscape" : "portrait";
   });
   const [serverJobs, setServerJobs] = useState(jobs);
+  // The copies of the photo just sent, for the sent screen's title.
+  const [sentCopies, setSentCopies] = useState(1);
   modeRef.current = mode;
   isFrontRef.current = isFront;
   camFailedRef.current = camFailed;
   refreshRef.current = onRefreshJobs;
-  const left = countMagnetsLeft(quota, serverJobs);
+  const left = countPhotosLeft(quota, serverJobs);
 
   const both = Boolean(landscape && portrait);
   const active = (orient === "portrait" ? portrait : landscape) ?? landscape ?? portrait;
@@ -618,9 +623,11 @@ export function MagnetCamera({
         frameId={active.id}
         frame={active.frame}
         overlayUrl={active.overlayUrl}
+        maxCopies={maxCopies}
         onRetake={handleRetake}
         onEventClosed={onEventClosed}
-        onSent={async () => {
+        onSent={async (copies) => {
+          setSentCopies(copies);
           // The magnet exists. If reading the list fails, the sent screen still opens and the list
           // is read again in the background.
           let next: PrintJob[] | null = null;
@@ -639,6 +646,7 @@ export function MagnetCamera({
       <PrintStatus
         jobs={serverJobs}
         quota={quota}
+        copies={sentCopies}
         photoUrl={photoUrl}
         frame={active.frame}
         overlayUrl={active.overlayUrl}

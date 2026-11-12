@@ -8,7 +8,7 @@ import { FrameSection } from "./frames/FrameSection";
 import { EventShare } from "./EventShare";
 import { EventCounter } from "./EventCounter";
 
-const empty: EventFormValue = { title: "", eventDate: "", printQuota: 2, eventType: null, targetText: "" };
+const empty: EventFormValue = { title: "", eventDate: "", printQuota: 2, eventType: null, targetText: "", maxCopies: 1 };
 
 export function EventEditorPage() {
   const { eventId } = useParams();
@@ -33,6 +33,7 @@ export function EventEditorPage() {
           printQuota: event.printQuota,
           eventType: event.eventType,
           targetText: event.magnetTarget ? String(event.magnetTarget) : "",
+          maxCopies: event.maxCopies,
         });
         setSaved(event);
         setCoverName(event.coverPath);
@@ -49,7 +50,8 @@ export function EventEditorPage() {
     if (!form.title.trim()) return "הזינו שם לאירוע.";
     if (!form.eventType) return "בחרו סוג אירוע.";
     if (!form.eventDate) return "בחרו תאריך.";
-    if (!Number.isInteger(form.printQuota) || form.printQuota < 1) return "לכל אורח מגיע לפחות מגנט אחד.";
+    if (!Number.isInteger(form.printQuota) || form.printQuota < 1) return "לכל אורח מגיעה לפחות תמונה אחת.";
+    if (!Number.isInteger(form.maxCopies) || form.maxCopies < 1 || form.maxCopies > 5) return "בחרו בין 1 ל־5 עותקים לתמונה.";
     if (parseTarget(form.targetText) === undefined) return "יעד המגנטים צריך להיות מספר שלם, או להישאר ריק.";
     return null;
   }
@@ -68,6 +70,7 @@ export function EventEditorPage() {
       printQuota: form.printQuota,
       eventType: form.eventType,
       magnetTarget: parseTarget(form.targetText) ?? null,
+      maxCopies: form.maxCopies,
     };
     try {
       const next = eventId
