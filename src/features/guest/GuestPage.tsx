@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { countMagnetsLeft, thumbPathFromPhoto } from "@/lib/magnets";
 import {
   SIGN_IN_WAIT,
+  currentGuestId,
   ensureGuestSession,
   getEventCardBySlug,
   getPublishedFrameWindow,
@@ -11,8 +12,10 @@ import {
 } from "@/services/api";
 import type { PrintJob } from "@/services/types";
 import { inAppBrowser } from "./browser";
+import { GuestClosed } from "./GuestClosed";
 import { GuestLanding, type GuestFrame } from "./GuestLanding";
 import type { GuestShot } from "./MagnetMeter";
+import { useEventRecheck } from "./useEventRecheck";
 import { thumbUrls, useOwnMagnets } from "./useOwnMagnets";
 import { useOutboxResume } from "./useOutboxResume";
 
@@ -70,10 +73,24 @@ type LiveEvent = {
   shots: GuestShot[];
 };
 
+type ClosedEvent = {
+  eventId: string;
+  title: string;
+  when: string | null;
+  landscape: GuestFrame | null;
+  portrait: GuestFrame | null;
+  /** Null when this browser has no guest yet: nothing to show, and no new guest is made. */
+  jobs: PrintJob[] | null;
+  shots: GuestShot[];
+};
+
 export function GuestPage() {
   const { slug = "" } = useParams();
   const [view, setView] = useState<"loading" | "missing" | "closed" | "live">("loading");
   const [live, setLive] = useState<LiveEvent | null>(null);
+  const [closed, setClosed] = useState<ClosedEvent | null>(null);
+  // Bumped when the event closes while the guest is on the page: the page loads again as closed.
+  const [reload, setReload] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [waiting, setWaiting] = useState(false);
 
@@ -94,6 +111,7 @@ export function GuestPage() {
     setError(null);
     setView("loading");
     setLive(null);
+    setClosed(null);
     setWaiting(false);
     getEventCardBySlug(slug)
       .then(async (card) => {
@@ -103,6 +121,25 @@ export function GuestPage() {
           return;
         }
         if (card.status === "closed") {
+          // The guest's own magnets keep their status, read only. A browser
+          // without a guest gets the thank-you screen without making one.
+          const guestId = await currentGuestId();
+          const [jobs, land, port] = await Promise.all([
+            guestId ? listOwnPrintJobs(card.id).catch(() => [] as PrintJob[]) : Promise.resolve(null),
+            loadFrame(card.frame_id, card.screen_path),
+            loadFrame(card.frame_portrait_id, card.screen_path_portrait),
+          ]);
+          const shots = jobs ? await shotsFrom(jobs) : [];
+          if (cancelled) return;
+          setClosed({
+            eventId: card.id,
+            title: card.title,
+            when: dateLabel(card.event_date),
+            landscape: land,
+            portrait: port,
+            jobs,
+            shots,
+          });
           setView("closed");
           return;
         }
@@ -135,7 +172,7 @@ export function GuestPage() {
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, reload]);
 
   if (error) {
     return <main className="guest-stage px-5 pt-10 text-base text-primary">{error}</main>;
@@ -144,11 +181,22 @@ export function GuestPage() {
     return <main className="guest-stage px-5 pt-10 text-base text-ink">{waiting ? SIGN_IN_WAIT : "טוענים…"}</main>;
   }
   if (view === "live" && live) {
-    return <GuestLive key={live.eventId} event={live} cameraTo={`/e/${slug}/camera`} />;
+    return (
+      <GuestLive
+        key={live.eventId}
+        event={live}
+        slug={slug}
+        cameraTo={`/e/${slug}/camera`}
+        onClosed={() => setReload((value) => value + 1)}
+      />
+    );
+  }
+  if (view === "closed" && closed) {
+    return closed.jobs ? <ClosedWithMagnets key={closed.eventId} event={closed} jobs={closed.jobs} /> : <GuestClosedView event={closed} shots={[]} />;
   }
   return (
     <GuestLanding
-      mode={view}
+      mode="missing"
       title=""
       dateLabel={null}
       coverUrl={null}
@@ -162,9 +210,52 @@ export function GuestPage() {
   );
 }
 
+function GuestClosedView({ event, shots }: { event: ClosedEvent; shots: GuestShot[] }) {
+  return (
+    <GuestClosed
+      title={event.title}
+      dateLabel={event.when}
+      landscape={event.landscape}
+      portrait={event.portrait}
+      shots={shots}
+    />
+  );
+}
+
+/** After closing, queued magnets still print: their status keeps updating, as on the live page. */
+function ClosedWithMagnets({ event, jobs: initial }: { event: ClosedEvent; jobs: PrintJob[] }) {
+  const { jobs } = useOwnMagnets(event.eventId, initial);
+  const [shots, setShots] = useState(event.shots);
+
+  useEffect(() => {
+    if (jobs === initial) return;
+    let cancelled = false;
+    void shotsFrom(jobs).then((next) => {
+      if (!cancelled) setShots(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [jobs, initial]);
+
+  return <GuestClosedView event={event} shots={shots} />;
+}
+
 /** The live landing: the guest's magnets stay current through useOwnMagnets, without Realtime. */
-function GuestLive({ event, cameraTo }: { event: LiveEvent; cameraTo: string }) {
+function GuestLive({
+  event,
+  slug,
+  cameraTo,
+  onClosed,
+}: {
+  event: LiveEvent;
+  slug: string;
+  cameraTo: string;
+  onClosed: () => void;
+}) {
   const { jobs, refresh } = useOwnMagnets(event.eventId, event.jobs);
+  // Back on the page after the admin closed the event: show the thank-you screen.
+  useEventRecheck(slug, onClosed);
   // A photo that a reload or a closed tab interrupted is sent now.
   const notice = useOutboxResume(event.eventId, event.guestId, () => {
     void refresh().catch(() => undefined);

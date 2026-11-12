@@ -9,6 +9,6 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/features/studio/__tests__/*.test.js", "src/features/admin/events/*.test.ts", "src/lib/cropToWindow.test.ts", "src/lib/magnets.test.ts", "src/lib/guestSend.test.ts", "src/lib/ownMagnets.test.ts", "src/lib/sessionStore.test.ts", "src/lib/guestSession.test.ts", "src/lib/fetchTimeout.test.ts", "src/lib/sendRetry.test.ts", "src/lib/outbox.test.ts", "src/lib/eventTypes.test.ts"],
+    include: ["src/features/studio/__tests__/*.test.js", "src/features/admin/events/*.test.ts", "src/lib/cropToWindow.test.ts", "src/lib/magnets.test.ts", "src/lib/guestSend.test.ts", "src/lib/ownMagnets.test.ts", "src/lib/sessionStore.test.ts", "src/lib/guestSession.test.ts", "src/lib/fetchTimeout.test.ts", "src/lib/sendRetry.test.ts", "src/lib/outbox.test.ts", "src/lib/eventTypes.test.ts", "src/lib/magnetTarget.test.ts", "src/lib/eventClosed.test.ts"],
   },
 });

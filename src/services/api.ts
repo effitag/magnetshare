@@ -6,7 +6,7 @@ import { retryTransient } from "@/lib/sendRetry";
 import { countMagnetsLeft, type FrameSlot } from "@/lib/magnets";
 import { supabase } from "@/lib/supabase";
 import { isFrameObjectPath } from "@/features/studio/storage/paths";
-import type { EventCard, Frame, NewLeadInput, PrintJob, PrintJobStatus } from "@/services/types";
+import type { EventCard, Frame, MagnetCounts, NewLeadInput, PrintJob, PrintJobStatus } from "@/services/types";
 
 export async function insertLead(input: NewLeadInput): Promise<void> {
   try {
@@ -231,6 +231,7 @@ export type AdminEventRow = {
   id: string;
   title: string;
   status: string;
+  magnet_target: number | null;
   frame_id: string | null;
   frame_name: string;
   frame_published: boolean;
@@ -248,6 +249,8 @@ export type AdminEventDetail = {
   coverPath: string | null;
   eventType: EventType | null;
   status: "draft" | "live" | "closed";
+  /** Optional target in physical magnets, for the counter only. */
+  magnetTarget: number | null;
 };
 
 export type EventDraft = {
@@ -256,15 +259,48 @@ export type EventDraft = {
   printQuota: number;
   /** Left out: the kind of event is not changed. */
   eventType?: EventType | null;
+  /** Left out: the target is not changed. Null: no target. */
+  magnetTarget?: number | null;
 };
 
 function eventTypeColumn(draft: EventDraft): { event_type?: EventType | null } {
   return draft.eventType === undefined ? {} : { event_type: draft.eventType };
 }
 
+function magnetTargetColumn(draft: EventDraft): { magnet_target?: number | null } {
+  return draft.magnetTarget === undefined ? {} : { magnet_target: draft.magnetTarget };
+}
+
+const TARGET_NOT_READY = "היעד יישמר אחרי עדכון המערכת. שאר הפרטים לא נשמרו, נסו שוב בלי יעד.";
+
+/**
+ * Until the target migration runs, the database has no magnet_target column.
+ * A save without a target then goes through without it; a save with one is
+ * refused with a clear message instead of losing the target silently.
+ */
+async function withTargetColumn<T extends { error: { message?: string } | null }>(
+  draft: EventDraft,
+  run: (columns: { magnet_target?: number | null }) => PromiseLike<T>,
+): Promise<T> {
+  const first = await run(magnetTargetColumn(draft));
+  if (!first.error || !missingColumn(first.error, "magnet_target")) return first;
+  if (draft.magnetTarget) throw new Error(TARGET_NOT_READY);
+  return run({});
+}
+
+function readTarget(row: { magnet_target?: unknown }): number | null {
+  const value = Number(row.magnet_target);
+  return row.magnet_target != null && Number.isInteger(value) && value > 0 ? value : null;
+}
+
 export async function listAdminEvents(): Promise<AdminEventRow[]> {
   const columns = "id, title, status, frame_id, frame_portrait_id";
-  const first = await supabase.from("events").select(columns).order("created_at", { ascending: false });
+  // Until the target migration runs, list the events without their targets.
+  const withTarget = await supabase.from("events").select(`${columns}, magnet_target`).order("created_at", { ascending: false });
+  const first =
+    withTarget.error && missingColumn(withTarget.error, "magnet_target")
+      ? await supabase.from("events").select(columns).order("created_at", { ascending: false })
+      : withTarget;
   const legacy = first.error && missingColumn(first.error, "frame_portrait_id");
   const { data, error } = legacy
     ? await supabase.from("events").select("id, title, status, frame_id").order("created_at", { ascending: false })
@@ -276,6 +312,7 @@ export async function listAdminEvents(): Promise<AdminEventRow[]> {
     status: string;
     frame_id: string | null;
     frame_portrait_id?: string | null;
+    magnet_target?: number | null;
   }[];
   const ids = [...new Set(rows.flatMap((row) => [row.frame_id, row.frame_portrait_id].filter((id): id is string => Boolean(id))))];
   const frames = new Map<string, { name: string; is_published: boolean }>();
@@ -293,6 +330,7 @@ export async function listAdminEvents(): Promise<AdminEventRow[]> {
       id: row.id,
       title: row.title,
       status: row.status,
+      magnet_target: readTarget(row),
       frame_id: row.frame_id ?? null,
       frame_name: landscape?.name ?? "",
       frame_published: landscape?.is_published === true,
@@ -344,7 +382,12 @@ function readEventType(row: { event_type?: unknown }): EventType | null {
 
 export async function getAdminEvent(id: string): Promise<AdminEventDetail> {
   const columns = "id, slug, title, event_date, print_quota, cover_path, status";
-  const first = await supabase.from("events").select(`${columns}, event_type`).eq("id", id).single();
+  const withTarget = await supabase.from("events").select(`${columns}, event_type, magnet_target`).eq("id", id).single();
+  // Until the target migration runs, read the event without its target.
+  const first =
+    withTarget.error && missingColumn(withTarget.error, "magnet_target")
+      ? await supabase.from("events").select(`${columns}, event_type`).eq("id", id).single()
+      : withTarget;
   // Until the event_type migration runs, read the event without it.
   const { data, error } = first.error && missingColumn(first.error, "event_type")
     ? await supabase.from("events").select(columns).eq("id", id).single()
@@ -359,23 +402,27 @@ export async function getAdminEvent(id: string): Promise<AdminEventDetail> {
     coverPath: (data.cover_path as string | null) ?? null,
     eventType: readEventType(data as { event_type?: unknown }),
     status: data.status as AdminEventDetail["status"],
+    magnetTarget: readTarget(data as { magnet_target?: unknown }),
   };
 }
 
 async function insertEvent(draft: EventDraft, slug: string): Promise<AdminEventDetail> {
-  const { data, error } = await supabase
-    .from("events")
-    .insert({
-      title: draft.title.trim(),
-      event_date: draft.eventDate,
-      slug,
-      print_quota: draft.printQuota,
-      status: "draft",
-      frame_id: null,
-      ...eventTypeColumn(draft),
-    })
-    .select("id, slug, title")
-    .single();
+  const { data, error } = await withTargetColumn(draft, (target) =>
+    supabase
+      .from("events")
+      .insert({
+        title: draft.title.trim(),
+        event_date: draft.eventDate,
+        slug,
+        print_quota: draft.printQuota,
+        status: "draft",
+        frame_id: null,
+        ...eventTypeColumn(draft),
+        ...target,
+      })
+      .select("id, slug, title")
+      .single(),
+  );
   if (error) {
     if (error.code === "23505") throw new Error("retry");
     throw toAppError(error, "לא הצלחנו לשמור את האירוע.");
@@ -389,6 +436,7 @@ async function insertEvent(draft: EventDraft, slug: string): Promise<AdminEventD
     coverPath: null,
     eventType: draft.eventType ?? null,
     status: "draft",
+    magnetTarget: draft.magnetTarget ?? null,
   };
 }
 
@@ -405,17 +453,20 @@ export async function createEvent(draft: EventDraft): Promise<AdminEventDetail> 
 }
 
 export async function updateEventDetails(eventId: string, draft: EventDraft): Promise<AdminEventDetail> {
-  const { data, error } = await supabase
-    .from("events")
-    .update({
-      title: draft.title.trim(),
-      event_date: draft.eventDate,
-      print_quota: draft.printQuota,
-      ...eventTypeColumn(draft),
-    })
-    .eq("id", eventId)
-    .select("id, slug, title, cover_path, status")
-    .single();
+  const { data, error } = await withTargetColumn(draft, (target) =>
+    supabase
+      .from("events")
+      .update({
+        title: draft.title.trim(),
+        event_date: draft.eventDate,
+        print_quota: draft.printQuota,
+        ...eventTypeColumn(draft),
+        ...target,
+      })
+      .eq("id", eventId)
+      .select("id, slug, title, cover_path, status")
+      .single(),
+  );
   if (error) throw toAppError(error, "לא הצלחנו לשמור את האירוע.");
   const saved = {
     status: data.status as AdminEventDetail["status"],
@@ -426,8 +477,40 @@ export async function updateEventDetails(eventId: string, draft: EventDraft): Pr
     printQuota: draft.printQuota,
     coverPath: (data.cover_path as string | null) ?? null,
   };
-  if (draft.eventType !== undefined) return { ...saved, eventType: draft.eventType };
-  return { ...saved, eventType: (await getAdminEvent(eventId)).eventType };
+  if (draft.eventType !== undefined && draft.magnetTarget !== undefined) {
+    return { ...saved, eventType: draft.eventType, magnetTarget: draft.magnetTarget };
+  }
+  const stored = await getAdminEvent(eventId);
+  return {
+    ...saved,
+    eventType: draft.eventType !== undefined ? draft.eventType : stored.eventType,
+    magnetTarget: draft.magnetTarget !== undefined ? draft.magnetTarget : stored.magnetTarget,
+  };
+}
+
+/**
+ * Physical magnets per event and status, for the admin counter and the
+ * events list. Admin only (the function checks). Null until the counter
+ * migration runs, so the screens simply leave the counter out.
+ */
+export async function getEventMagnetCounts(eventIds: string[]): Promise<Map<string, MagnetCounts> | null> {
+  const counts = new Map<string, MagnetCounts>();
+  if (!eventIds.length) return counts;
+  const { data, error } = await supabase.rpc("event_magnet_counts", { p_event_ids: eventIds });
+  if (error) {
+    if (missingFunction(error)) return null;
+    throw toAppError(error, "לא הצלחנו לטעון את מספר המגנטים.");
+  }
+  for (const row of (data ?? []) as Record<string, unknown>[]) {
+    counts.set(String(row.event_id), {
+      queued: Number(row.queued ?? 0),
+      printing: Number(row.printing ?? 0),
+      ready: Number(row.ready ?? 0),
+      delivered: Number(row.delivered ?? 0),
+      rejected: Number(row.rejected ?? 0),
+    });
+  }
+  return counts;
 }
 
 export async function saveEventCover(eventId: string, file: File): Promise<string> {
@@ -656,6 +739,21 @@ export async function ensureGuestSession(options: { onWait?: () => void } = {}):
     return await ensureGuest();
   } finally {
     if (onWait) signInWaiters.delete(onWait);
+  }
+}
+
+/**
+ * The guest this browser already signed in as, or null. Never signs in: a
+ * closed event's thank-you screen shows the guest's own magnets only when
+ * there already is a guest, and does not create a new one.
+ */
+export async function currentGuestId(): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const user = data.session?.user;
+    return user?.is_anonymous ? user.id : null;
+  } catch {
+    return null;
   }
 }
 

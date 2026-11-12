@@ -5,14 +5,16 @@ type Props = {
   dateLabel?: string | null;
   coverUrl?: string | null;
   note?: string | null;
+  /** A shorter hero, for the closed event's thank-you screen. */
+  compact?: boolean;
 };
 
-export function GuestHero({ title, dateLabel, coverUrl, note }: Props) {
+export function GuestHero({ title, dateLabel, coverUrl, note, compact = false }: Props) {
   const [coverOk, setCoverOk] = useState(true);
   const showCover = Boolean(coverUrl) && coverOk;
 
   return (
-    <div className={showCover ? "guest-top" : "guest-top is-plain"}>
+    <div className={`${showCover ? "guest-top" : "guest-top is-plain"}${compact ? " is-compact" : ""}`}>
       <div className="guest-hero">
         {showCover ? (
           <img

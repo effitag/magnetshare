@@ -1,10 +1,14 @@
 import { Link } from "react-router-dom";
 import { eventPhase, phaseLabel } from "@/features/admin/events/eventState";
+import type { TargetLevel } from "@/lib/magnetTarget";
 
 export type EventListItem = {
   id: string;
   title: string;
   status: string;
+  /** "80% מהיעד" or "הגיע ליעד" for an event with a target, otherwise null. */
+  badge?: string | null;
+  badgeLevel?: TargetLevel;
   frameId: string | null;
   framePublished: boolean;
   portraitId: string | null;
@@ -25,7 +29,18 @@ export function EventList({ events }: Props) {
           <li key={event.id}>
             <Link className="block min-h-11 rounded-2xl border-[3px] border-ink bg-sticker p-4" to={`/admin/events/${event.id}`}>
               <h2 className="text-lg text-ink">{event.title}</h2>
-              <p className="mt-1 text-base text-ink">{phaseLabel[eventPhase(event)]}</p>
+              <p className="mt-1 flex flex-wrap items-center gap-2 text-base text-ink">
+                {phaseLabel[eventPhase(event)]}
+                {event.badge ? (
+                  <span
+                    className={`rounded-full border-2 border-ink px-3 py-0.5 ${
+                      event.badgeLevel === "reached" ? "bg-primary text-primary-ink" : "bg-accent text-ink"
+                    }`}
+                  >
+                    {event.badge}
+                  </span>
+                ) : null}
+              </p>
             </Link>
           </li>
         ))}

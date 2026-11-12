@@ -75,6 +75,8 @@ type Props = {
   onClose: () => void;
   onPrinted: () => Promise<PrintJob[]>;
   onRefreshJobs: () => Promise<PrintJob[]>;
+  /** A send was refused because the admin closed the event. */
+  onEventClosed: () => void;
 };
 
 export function MagnetCamera({
@@ -87,6 +89,7 @@ export function MagnetCamera({
   onClose,
   onPrinted,
   onRefreshJobs,
+  onEventClosed,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -616,6 +619,7 @@ export function MagnetCamera({
         frame={active.frame}
         overlayUrl={active.overlayUrl}
         onRetake={handleRetake}
+        onEventClosed={onEventClosed}
         onSent={async () => {
           // The magnet exists. If reading the list fails, the sent screen still opens and the list
           // is read again in the background.

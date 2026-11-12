@@ -12,6 +12,8 @@ type Props = {
   left: number;
   shots?: GuestShot[];
   onOpen?: (id: string) => void;
+  /** After the event closed: the guest's magnets only, without empty places or the count line. */
+  readOnly?: boolean;
 };
 
 function MagnetGlyph() {
@@ -23,8 +25,8 @@ function MagnetGlyph() {
   );
 }
 
-export function MagnetMeter({ left, shots = [], onOpen }: Props) {
-  const count = Math.max(0, left);
+export function MagnetMeter({ left, shots = [], onOpen, readOnly = false }: Props) {
+  const count = readOnly ? 0 : Math.max(0, left);
   return (
     <div>
       <ul className="guest-magnet-row">
@@ -46,7 +48,7 @@ export function MagnetMeter({ left, shots = [], onOpen }: Props) {
           </li>
         ))}
       </ul>
-      <p className="mt-2 text-base text-ink">{magnetLine(count)}</p>
+      {readOnly ? null : <p className="mt-2 text-base text-ink">{magnetLine(count)}</p>}
     </div>
   );
 }
