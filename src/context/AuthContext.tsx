@@ -7,7 +7,10 @@ type AuthValue = {
   session: Session | null;
   user: User | null;
   isAdmin: boolean;
-  signInWithGoogle: () => Promise<void>;
+  /** A print-station operator (admin_profiles role 'operator'). Admins are not operators. */
+  isOperator: boolean;
+  /** Signs in with Google and comes back to the given path (default /admin). */
+  signInWithGoogle: (returnTo?: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -23,10 +26,17 @@ async function readIsAdmin(): Promise<boolean> {
   return data === true;
 }
 
+async function readIsOperator(): Promise<boolean> {
+  const { data, error } = await supabase.rpc("is_operator");
+  if (error) return false;
+  return data === true;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isOperator, setIsOperator] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -35,13 +45,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(next);
       if (!next?.user || anonymous(next.user)) {
         setIsAdmin(false);
+        setIsOperator(false);
         setLoading(false);
         return;
       }
       setLoading(true);
-      void readIsAdmin().then((admin) => {
+      void Promise.all([readIsAdmin(), readIsOperator()]).then(([admin, operator]) => {
         if (!active) return;
         setIsAdmin(admin);
+        setIsOperator(operator);
         setLoading(false);
       });
     }
@@ -55,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!active) return;
         setSession(null);
         setIsAdmin(false);
+        setIsOperator(false);
         setLoading(false);
       });
 
@@ -74,10 +87,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       user: session?.user ?? null,
       isAdmin: Boolean(session?.user) && !anonymous(session?.user) && isAdmin,
-      signInWithGoogle: async () => {
+      isOperator: Boolean(session?.user) && !anonymous(session?.user) && isOperator,
+      signInWithGoogle: async (returnTo = "/admin") => {
         const { error } = await supabase.auth.signInWithOAuth({
           provider: "google",
-          options: { redirectTo: `${window.location.origin}/admin` },
+          options: { redirectTo: `${window.location.origin}${returnTo}` },
         });
         if (error) throw error;
       },
@@ -89,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) await supabase.auth.signOut({ scope: "local" });
       },
     }),
-    [loading, session, isAdmin],
+    [loading, session, isAdmin, isOperator],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

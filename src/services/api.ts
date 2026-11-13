@@ -6,7 +6,19 @@ import { retryTransient } from "@/lib/sendRetry";
 import { countMagnetsLeft, type FrameSlot } from "@/lib/magnets";
 import { guestSupabase, supabase } from "@/lib/supabase";
 import { isFrameObjectPath } from "@/features/studio/storage/paths";
-import type { EventCard, Frame, MagnetCounts, NewLeadInput, PrintJob, PrintJobStatus } from "@/services/types";
+import type {
+  EventCard,
+  Frame,
+  MagnetCounts,
+  NewLeadInput,
+  PrintJob,
+  PrintJobStatus,
+  PrintRun,
+  StationEvent,
+  StationFrame,
+  StationJob,
+} from "@/services/types";
+import { stationErrorMessage, type RejectReason } from "@/features/station/stationErrors";
 
 export async function insertLead(input: NewLeadInput): Promise<void> {
   try {
@@ -924,3 +936,177 @@ export async function listOwnPrintJobs(eventId: string): Promise<PrintJob[]> {
   }
 }
 
+
+// --- Print station (operators and admins) ---------------------------------
+// Everything here uses the staff session (supabase), never the guest one.
+// Status changes go only through the database functions from migration
+// 202611180001; they check the caller may operate the event.
+
+function stationError(error: { message?: string; code?: string } | null, fallback: string): AppError {
+  const message = String(error?.message ?? "");
+  const code = /^[a-z_]+$/.test(message) ? message : undefined;
+  return new AppError(stationErrorMessage(code, fallback), { ...errorInfo(error), code });
+}
+
+/** Live and closed events the signed-in operator (or admin) may operate. */
+export async function listStationEvents(): Promise<StationEvent[]> {
+  const { data, error } = await supabase
+    .from("events")
+    .select("id, slug, title, event_date, status, magnet_target")
+    .in("status", ["live", "closed"])
+    .order("event_date", { ascending: false });
+  if (error) throw toAppError(error, "לא הצלחנו לטעון את האירועים.");
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    slug: row.slug as string,
+    title: row.title as string,
+    eventDate: (row.event_date as string | null) ?? null,
+    status: row.status as StationEvent["status"],
+    magnetTarget: readTarget(row as { magnet_target?: unknown }),
+  }));
+}
+
+export async function getStationEvent(eventId: string): Promise<StationEvent | null> {
+  const { data, error } = await supabase
+    .from("events")
+    .select("id, slug, title, event_date, status, magnet_target")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (error) throw toAppError(error, "לא הצלחנו לטעון את האירוע.");
+  if (!data) return null;
+  return {
+    id: data.id as string,
+    slug: data.slug as string,
+    title: data.title as string,
+    eventDate: (data.event_date as string | null) ?? null,
+    status: data.status as StationEvent["status"],
+    magnetTarget: readTarget(data as { magnet_target?: unknown }),
+  };
+}
+
+/** Every magnet of the event, oldest first, with its photo path. */
+export async function listStationJobs(eventId: string): Promise<StationJob[]> {
+  const { data, error } = await supabase
+    .from("print_jobs")
+    .select("id, status, created_at, frame_id, photo:guest_photos(storage_path)")
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: true });
+  if (error) throw toAppError(error, "לא הצלחנו לטעון את התור.");
+  return (data ?? []).map((row) => {
+    const photo = row.photo as { storage_path?: string } | { storage_path?: string }[] | null;
+    const nested = Array.isArray(photo) ? photo[0] : photo;
+    return {
+      id: row.id as string,
+      status: row.status as PrintJobStatus,
+      createdAt: row.created_at as string,
+      frameId: (row.frame_id as string | null) ?? null,
+      storagePath: nested?.storage_path ?? null,
+    };
+  });
+}
+
+export async function listStationRuns(eventId: string): Promise<PrintRun[]> {
+  const { data, error } = await supabase
+    .from("print_runs")
+    .select("id, job_id, kind, copies, status, station, created_at")
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: true });
+  if (error) throw toAppError(error, "לא הצלחנו לטעון את ההדפסות.");
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    jobId: row.job_id as string,
+    kind: row.kind as PrintRun["kind"],
+    copies: Number(row.copies),
+    status: row.status as PrintRun["status"],
+    station: row.station as string,
+    createdAt: row.created_at as string,
+  }));
+}
+
+export async function getStationFrames(frameIds: string[]): Promise<StationFrame[]> {
+  if (!frameIds.length) return [];
+  const { data, error } = await supabase
+    .from("frames")
+    .select("id, width_mm, height_mm, window_x, window_y, window_w, window_h, overlay_path")
+    .in("id", frameIds);
+  if (error) throw toAppError(error, "לא הצלחנו לטעון את המסגרות.");
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    widthMm: Number(row.width_mm),
+    heightMm: Number(row.height_mm),
+    windowX: Number(row.window_x),
+    windowY: Number(row.window_y),
+    windowW: Number(row.window_w),
+    windowH: Number(row.window_h),
+    overlayPath: (row.overlay_path as string | null) ?? `frames/${row.id as string}/overlay.png`,
+    screenPath: `frames/${row.id as string}/screen.webp`,
+  }));
+}
+
+/** The full-size file (photo or overlay) as an image the station can draw. */
+export async function downloadStationImage(path: string): Promise<Blob> {
+  const { data, error } = await supabase.storage.from("media").download(path);
+  if (error || !data) throw toAppError(error, "לא הצלחנו לטעון את התמונה להדפסה.");
+  return data;
+}
+
+export async function startPrint(input: {
+  jobId: string;
+  copies: number;
+  station: string;
+  kind: "print" | "reprint";
+  printer?: string | null;
+}): Promise<string> {
+  const { data, error } = await supabase.rpc("start_print", {
+    p_job_id: input.jobId,
+    p_copies: input.copies,
+    p_station: input.station,
+    p_kind: input.kind,
+    p_printer: input.printer ?? null,
+  });
+  if (error) throw stationError(error, "לא הצלחנו להתחיל את ההדפסה.");
+  return data as string;
+}
+
+export async function releasePrint(runId: string): Promise<void> {
+  const { error } = await supabase.rpc("release_print", { p_run_id: runId });
+  if (error) throw stationError(error, "לא הצלחנו לבטל את ההדפסה.");
+}
+
+export async function confirmPrint(runId: string, printed: boolean): Promise<void> {
+  const { error } = await supabase.rpc("confirm_print", { p_run_id: runId, p_printed: printed });
+  if (error) throw stationError(error, "לא הצלחנו לעדכן את ההדפסה.");
+}
+
+export async function markDelivered(jobIds: string[]): Promise<number> {
+  const { data, error } = await supabase.rpc("mark_delivered", { p_job_ids: jobIds });
+  if (error) throw stationError(error, "לא הצלחנו לסמן כנמסר.");
+  return Number(data ?? 0);
+}
+
+export async function rejectJob(jobId: string, reason: RejectReason): Promise<void> {
+  const { error } = await supabase.rpc("reject_job", { p_job_id: jobId, p_reason: reason });
+  if (error) throw stationError(error, "לא הצלחנו לדחות את המגנט.");
+}
+
+export async function reopenJob(jobId: string): Promise<void> {
+  const { error } = await supabase.rpc("reopen_job", { p_job_id: jobId });
+  if (error) throw stationError(error, "לא הצלחנו לבטל.");
+}
+
+/**
+ * Calls onChange whenever a magnet of the event is added or changes status
+ * (Realtime, filtered by RLS to the events the caller may operate). Returns
+ * a function that stops listening.
+ */
+export function subscribeStationJobs(eventId: string, onChange: () => void): () => void {
+  const channel = supabase
+    .channel(`station-jobs-${eventId}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "print_jobs", filter: `event_id=eq.${eventId}` }, () =>
+      onChange(),
+    )
+    .subscribe();
+  return () => {
+    void supabase.removeChannel(channel);
+  };
+}

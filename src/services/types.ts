@@ -107,3 +107,46 @@ export type MagnetCounts = {
   delivered: number;
   rejected: number;
 };
+
+/** An event as the print station lists it. */
+export type StationEvent = {
+  id: string;
+  slug: string;
+  title: string;
+  eventDate: string | null;
+  status: "draft" | "live" | "closed";
+  magnetTarget: number | null;
+};
+
+/** A magnet in the print station's queue. */
+export type StationJob = {
+  id: string;
+  status: PrintJobStatus;
+  createdAt: string;
+  frameId: string | null;
+  storagePath: string | null;
+};
+
+/** One physical print of a magnet (print_runs). */
+export type PrintRun = {
+  id: string;
+  jobId: string;
+  kind: "print" | "reprint";
+  copies: number;
+  status: "sent" | "printed" | "failed" | "released";
+  station: string;
+  createdAt: string;
+};
+
+/** A frame's geometry and overlay, for composing a print. */
+export type StationFrame = {
+  id: string;
+  widthMm: number;
+  heightMm: number;
+  windowX: number;
+  windowY: number;
+  windowW: number;
+  windowH: number;
+  overlayPath: string;
+  screenPath: string;
+};
