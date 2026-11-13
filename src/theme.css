@@ -180,6 +180,58 @@
   text-align: center;
 }
 
+/*
+ * The public site's one button: a pill with a 3px ink border and a hard
+ * offset shadow (the same look as .fab). Colour comes from a variant.
+ */
+.btn {
+  display: inline-flex;
+  min-height: 3.25rem;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 1.5rem;
+  border: 3px solid var(--color-ink);
+  border-radius: 999px;
+  color: var(--color-ink);
+  box-shadow: 4px 4px 0 var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  line-height: 1.05;
+  text-align: center;
+  text-decoration: none;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+}
+
+.btn-pop {
+  background: var(--color-pop);
+}
+
+.btn-surface {
+  background: var(--color-surface);
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin-top: 1.5rem;
+}
+
+/* The header's contact button: desktop only; on phones the WhatsApp FAB covers it. */
+.header-cta {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .header-cta {
+    display: inline-flex;
+  }
+}
+
 .gallery-card {
   position: relative;
   width: min(100%, 11rem);

@@ -33,8 +33,11 @@ export function HomePage() {
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-paper">
-      <header className="relative z-20 bg-paper px-4 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] pb-3">
+      <header className="relative z-20 flex items-center justify-between gap-3 bg-paper px-4 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] pb-3">
         <p className="font-display text-lg text-primary">MagnetimShare</p>
+        <a className="btn btn-pop header-cta" href="#contact">
+          ספרו לנו על האירוע
+        </a>
       </header>
 
       <div className="marquee" aria-hidden="true">
@@ -49,13 +52,24 @@ export function HomePage() {
       </div>
 
       <section className="px-4 md:grid md:grid-cols-2 md:items-center md:gap-6">
-        <h1 className="sticker">
-          <span className="block">תמונה בתוך מגנט.</span>
-          <span className="sticker-pop block">מודפסת ומוכנה לכם.</span>
-        </h1>
-        <p className="mt-4 max-w-md text-base text-ink">
-          האורחים מצלמים בתוך מסגרת מעוצבת, ואנחנו מדפיסים לכל אחד מגנט משלו.
-        </p>
+        <div>
+          <h1 className="sticker">
+            <span className="block">תמונה בתוך מגנט.</span>
+            <span className="sticker-pop block">מודפסת ומוכנה לכם.</span>
+          </h1>
+          <p className="mt-4 max-w-md text-base text-ink">
+            האורחים מצלמים בתוך מסגרת מעוצבת, ואנחנו מדפיסים לכל אחד מגנט משלו.
+          </p>
+          <div className="hero-actions">
+            <a className="btn btn-pop" href="#contact">
+              ספרו לנו על האירוע
+            </a>
+            <a className="btn btn-surface" href={whatsAppUrl()} target="_blank" rel="noopener noreferrer">
+              <WhatsAppIcon />
+              דברו איתנו בוואטסאפ
+            </a>
+          </div>
+        </div>
 
         <div className="magnet-stage mt-6">
           {shots.map((shot) => (

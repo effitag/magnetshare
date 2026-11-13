@@ -61,7 +61,7 @@ export function ContactSection() {
         </h2>
         <p className="mt-3 text-base text-ink">שם וטלפון, ונחזור.</p>
         <a
-          className="mt-6 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-full border-[3px] border-ink bg-pop px-4 font-display text-xl text-ink shadow-[4px_4px_0_#1c1416]"
+          className="btn btn-pop mt-6 w-full"
           href={whatsAppUrl()}
           target="_blank"
           rel="noopener noreferrer"
@@ -135,7 +135,7 @@ export function ContactSection() {
             ) : null}
             <button
               type="submit"
-              className="field-scroll inline-flex min-h-11 w-full items-center justify-center rounded-full border-2 border-ink bg-surface px-4 text-base text-ink"
+              className="field-scroll btn btn-surface w-full"
               disabled={pending}
               onFocus={(event) => keepVisible(event.target)}
             >
