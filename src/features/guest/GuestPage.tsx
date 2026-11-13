@@ -8,7 +8,7 @@ import {
   getEventCardBySlug,
   getPublishedFrameWindow,
   listOwnPrintJobs,
-  signedMediaUrl,
+  guestSignedMediaUrl,
 } from "@/services/api";
 import type { PrintJob } from "@/services/types";
 import { inAppBrowser } from "./browser";
@@ -31,7 +31,7 @@ async function loadFrame(id: string | null, screen: string | null): Promise<Gues
   try {
     const row = await getPublishedFrameWindow(id);
     if (!row) return null;
-    const overlayUrl = screen ? await signedMediaUrl(screen, { width: 480, resize: "contain" }) : null;
+    const overlayUrl = screen ? await guestSignedMediaUrl(screen, { width: 480, resize: "contain" }) : null;
     return {
       id,
       overlayUrl,
@@ -146,7 +146,7 @@ export function GuestPage() {
         const guestId = await ensureGuestSession({ onWait: () => setWaiting(true) });
         const [jobs, cover, land, port] = await Promise.all([
           listOwnPrintJobs(card.id).catch(() => [] as PrintJob[]),
-          card.cover_path ? signedMediaUrl(card.cover_path, { width: 800, resize: "cover" }) : Promise.resolve(null),
+          card.cover_path ? guestSignedMediaUrl(card.cover_path, { width: 800, resize: "cover" }) : Promise.resolve(null),
           loadFrame(card.frame_id, card.screen_path),
           loadFrame(card.frame_portrait_id, card.screen_path_portrait),
         ]);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSessionStore, type KeyValueStore } from "./sessionStore";
+import { createSessionStore, moveGuestSession, type KeyValueStore } from "./sessionStore";
 
 function memoryStore(): KeyValueStore & { data: Map<string, string> } {
   const data = new Map<string, string>();
@@ -79,5 +79,56 @@ describe("session store", () => {
     expect(local.data.has("sb-auth")).toBe(false);
     expect(session.data.has("sb-auth")).toBe(false);
     expect(store.getItem("sb-auth")).toBeNull();
+  });
+});
+
+describe("moveGuestSession", () => {
+  const guest = JSON.stringify({ access_token: "a", refresh_token: "r", user: { id: "g1", is_anonymous: true } });
+  const admin = JSON.stringify({ access_token: "a", refresh_token: "r", user: { id: "a1", is_anonymous: false } });
+
+  it("moves an anonymous guest from the shared key to the guest key, once", () => {
+    const local = memoryStore();
+    const store = createSessionStore(local, memoryStore());
+    store.setItem("sb-x-auth-token", guest);
+    expect(moveGuestSession(store, "sb-x-auth-token", "sb-x-guest-auth-token")).toBe("moved");
+    expect(store.getItem("sb-x-guest-auth-token")).toBe(guest);
+    expect(store.getItem("sb-x-auth-token")).toBeNull();
+    expect(moveGuestSession(store, "sb-x-auth-token", "sb-x-guest-auth-token")).toBe("kept");
+  });
+
+  it("never moves an admin's session", () => {
+    const store = createSessionStore(memoryStore(), memoryStore());
+    store.setItem("sb-x-auth-token", admin);
+    expect(moveGuestSession(store, "sb-x-auth-token", "sb-x-guest-auth-token")).toBe("kept");
+    expect(store.getItem("sb-x-auth-token")).toBe(admin);
+    expect(store.getItem("sb-x-guest-auth-token")).toBeNull();
+  });
+
+  it("keeps a guest session that is already under the guest key", () => {
+    const store = createSessionStore(memoryStore(), memoryStore());
+    const newer = JSON.stringify({ user: { id: "g2", is_anonymous: true } });
+    store.setItem("sb-x-guest-auth-token", newer);
+    store.setItem("sb-x-auth-token", guest);
+    expect(moveGuestSession(store, "sb-x-auth-token", "sb-x-guest-auth-token")).toBe("kept");
+    expect(store.getItem("sb-x-guest-auth-token")).toBe(newer);
+  });
+
+  it("moves a guest an older build left in this tab's sessionStorage", () => {
+    const local = memoryStore();
+    const session = memoryStore();
+    session.setItem("sb-x-auth-token", guest);
+    const store = createSessionStore(local, session);
+    expect(moveGuestSession(store, "sb-x-auth-token", "sb-x-guest-auth-token")).toBe("moved");
+    expect(local.data.get("sb-x-guest-auth-token")).toBe(guest);
+    expect(local.data.has("sb-x-auth-token")).toBe(false);
+    expect(session.data.has("sb-x-auth-token")).toBe(false);
+  });
+
+  it("ignores empty or unreadable values", () => {
+    const store = createSessionStore(memoryStore(), memoryStore());
+    expect(moveGuestSession(store, "sb-x-auth-token", "sb-x-guest-auth-token")).toBe("kept");
+    store.setItem("sb-x-auth-token", "not json");
+    expect(moveGuestSession(store, "sb-x-auth-token", "sb-x-guest-auth-token")).toBe("kept");
+    expect(store.getItem("sb-x-auth-token")).toBe("not json");
   });
 });
