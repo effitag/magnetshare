@@ -8,6 +8,7 @@ const tabs = [
   { to: "/admin/queue", label: "תור הדפסה", end: false },
   { to: "/admin/frames", label: "מסגרות", end: false },
   { to: "/admin/leads", label: "פניות", end: false },
+  { to: "/admin/team", label: "צוות", end: false },
 ];
 
 function GoogleMark() {

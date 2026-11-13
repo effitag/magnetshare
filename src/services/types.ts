@@ -107,3 +107,13 @@ export type MagnetCounts = {
   delivered: number;
   rejected: number;
 };
+
+/** An admin or a print-station operator, as the "צוות" screen lists them. */
+export type StaffMember = {
+  email: string;
+  role: "admin" | "operator";
+  /** Null until an invited operator signs in for the first time. */
+  userId: string | null;
+  signedIn: boolean;
+  eventIds: string[];
+};
