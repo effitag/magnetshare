@@ -14,10 +14,12 @@
 //   idem     One guest sends the same photo path twice at the same moment, then once more: one magnet.
 //   quota    One new guest sends 7 different photos at the same moment: 5 magnets, 2 print_quota_exceeded.
 //   foreign  A guest sends paths outside their own folder: storage_path_not_yours and no magnet.
-//   direct   A guest skips the RPC and inserts guest_photos rows straight through REST with
-//            paths outside their own folder: every one refused by guest_photos_path_own_folder
-//            (23514). One insert in their own folder is the control and goes through, which shows
-//            the refusals come from the constraint and not from RLS.
+//   direct   A guest skips the RPC and writes straight through REST: guest_photos rows outside
+//            and inside their own folder, and a print_jobs row with copies 5. Since migration
+//            202611170002 guests have no INSERT on either table, so every one is refused with
+//            42501 (permission denied) and no row appears. The control sends a photo in the
+//            guest's own folder through create_guest_print, which still makes one magnet with
+//            copies 1, so the refusals come from the missing direct path and not a broken guest.
 //   nofile   A guest calls create_guest_print for a path it never uploaded: photo_not_uploaded,
 //            and no magnet.
 //
@@ -241,7 +243,7 @@ function errorCode(result) {
 /** The guest's own magnets for the test event, read through RLS. */
 async function ownJobs(guest) {
   const result = await call(
-    `/rest/v1/print_jobs?select=id,guest_id,photo_id&event_id=eq.${args.event}`,
+    `/rest/v1/print_jobs?select=id,guest_id,photo_id,copies&event_id=eq.${args.event}`,
     { headers: { apikey: KEY, authorization: `Bearer ${guest.token}` } },
   );
   if (result.status !== 200 || !Array.isArray(result.body)) {
@@ -392,43 +394,67 @@ async function insertPhotoRow(guest, storagePath) {
     },
     body: JSON.stringify({ event_id: args.event, guest_id: guest.id, storage_path: storagePath }),
   });
+  return restCode(result);
+}
+
+/** A direct REST insert into print_jobs, as a guest could do without the app: 5 copies of a photo. */
+async function insertJobRow(guest, photoId) {
+  const result = await call("/rest/v1/print_jobs", {
+    method: "POST",
+    headers: {
+      apikey: KEY,
+      authorization: `Bearer ${guest.token}`,
+      "content-type": "application/json",
+      prefer: "return=minimal",
+    },
+    body: JSON.stringify({ event_id: args.event, photo_id: photoId, guest_id: guest.id, copies: 5, frame_id: args.frame }),
+  });
+  return restCode(result);
+}
+
+function restCode(result) {
   if (result.status === 201) return "inserted";
   const body = result.body ?? {};
-  const message = typeof body === "object" ? String(body.message ?? "") : String(body);
-  const constraint = message.includes("guest_photos_path_own_folder")
-    ? " guest_photos_path_own_folder"
-    : "";
-  return `${typeof body === "object" && body.code ? body.code : `http_${result.status}`}${constraint}`;
+  return typeof body === "object" && body.code ? String(body.code) : `http_${result.status}`;
 }
 
 async function direct(owner, intruder) {
   const before = await ownPhotoCount(intruder);
   const ownerBefore = await ownPhotoCount(owner);
+  const jobsBefore = (await ownJobs(intruder)).jobs.length;
   const cases = {
     other_guests_folder: `${args.event}/${owner.id}/${randomUUID()}_photo.jpg`,
     escape_with_dots: `${args.event}/${intruder.id}/../${owner.id}/${randomUUID()}_photo.jpg`,
     sub_folder: `${args.event}/${intruder.id}/x/${randomUUID()}_photo.jpg`,
     other_event_folder: `${randomUUID()}/${intruder.id}/${randomUUID()}_photo.jpg`,
+    own_folder: `${args.event}/${intruder.id}/${randomUUID()}_photo.jpg`,
   };
   const results = {};
   for (const [name, path] of Object.entries(cases)) {
     results[name] = await insertPhotoRow(intruder, path);
   }
-  const control = await insertPhotoRow(
-    intruder,
-    `${args.event}/${intruder.id}/${randomUUID()}_photo.jpg`,
-  );
+  // Control: the same guest sends through create_guest_print, which still works.
+  const control = await send(intruder, photoPath(intruder, randomUUID()));
+  const controlJobs = (await ownJobs(intruder)).jobs;
+  const controlJob = controlJobs.find((job) => job.id === control.job);
+  // A direct magnet for the control's photo, with 5 copies.
+  results.print_job_copies_5 = await insertJobRow(intruder, controlJob?.photo_id ?? randomUUID());
   const after = await ownPhotoCount(intruder);
   const ownerAfter = await ownPhotoCount(owner);
+  const jobsAfter = (await ownJobs(intruder)).jobs;
   const pass =
-    Object.values(results).every((code) => code === "23514 guest_photos_path_own_folder") &&
-    control === "inserted" &&
+    Object.values(results).every((code) => code === "42501") &&
+    control.code === "ok" &&
+    controlJob?.copies === 1 &&
     after - before === 1 &&
+    jobsAfter.length - jobsBefore === 1 &&
     ownerAfter === ownerBefore;
   return {
     results,
-    own_folder_control: control,
-    intruder_new_rows: after - before,
+    send_function_control: control.code,
+    control_copies: controlJob?.copies ?? null,
+    intruder_new_photo_rows: after - before,
+    intruder_new_magnets: jobsAfter.length - jobsBefore,
     owner_new_rows: ownerAfter - ownerBefore,
     pass,
   };
