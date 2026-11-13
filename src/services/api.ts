@@ -4,7 +4,7 @@ import { isAlreadyStored } from "@/lib/guestSend";
 import { createGuestSignIn } from "@/lib/guestSession";
 import { retryTransient } from "@/lib/sendRetry";
 import { countMagnetsLeft, type FrameSlot } from "@/lib/magnets";
-import { supabase } from "@/lib/supabase";
+import { guestSupabase, supabase } from "@/lib/supabase";
 import { isFrameObjectPath } from "@/features/studio/storage/paths";
 import type { EventCard, Frame, MagnetCounts, NewLeadInput, PrintJob, PrintJobStatus } from "@/services/types";
 
@@ -43,7 +43,7 @@ export function missingFunction(error: { code?: string } | null): boolean {
 
 export async function getEventCardBySlug(slug: string): Promise<EventCard | null> {
   try {
-    const card = await supabase.rpc("get_event_card", { p_slug: slug }).maybeSingle();
+    const card = await guestSupabase.rpc("get_event_card", { p_slug: slug }).maybeSingle();
     if (!card.error) return (card.data as EventCard | null) ?? null;
     if (!missingFunction(card.error)) throw card.error;
     return await getEventCardFromView(slug);
@@ -54,9 +54,9 @@ export async function getEventCardBySlug(slug: string): Promise<EventCard | null
 
 async function getEventCardFromView(slug: string): Promise<EventCard | null> {
   try {
-    const first = await supabase.from("event_cards").select(EVENT_CARD_COLUMNS).eq("slug", slug).maybeSingle();
+    const first = await guestSupabase.from("event_cards").select(EVENT_CARD_COLUMNS).eq("slug", slug).maybeSingle();
     if (first.error && (missingColumn(first.error, "frame_portrait_id") || missingColumn(first.error, "screen_path_portrait"))) {
-      const second = await supabase.from("event_cards").select(EVENT_CARD_LEGACY).eq("slug", slug).maybeSingle();
+      const second = await guestSupabase.from("event_cards").select(EVENT_CARD_LEGACY).eq("slug", slug).maybeSingle();
       if (second.error) throw second.error;
       if (!second.data) return null;
       return { ...(second.data as EventCard), frame_portrait_id: null, screen_path_portrait: null };
@@ -220,7 +220,7 @@ export async function uploadGuestFile(path: string, file: Blob): Promise<void> {
   if (top === "frames" || top === "events") {
     throw toAppError(new Error("reserved"), "אי אפשר לשמור קובץ של אורח בתיקייה הזו.");
   }
-  const { error } = await supabase.storage.from("media").upload(path, file, {
+  const { error } = await guestSupabase.storage.from("media").upload(path, file, {
     contentType: file.type || "image/jpeg",
     upsert: false,
   });
@@ -710,18 +710,27 @@ export async function countQueuedJobs(eventId: string, frameId: string): Promise
 const SIGN_IN_RETRY_DELAYS_MS = [2_000, 5_000, 10_000];
 const signInWaiters = new Set<() => void>();
 
-/** The guest of this browser: the stored session if there is one, otherwise one new anonymous guest for all tabs. */
+/** The anonymous guest stored for the guest pages, or null. An admin's session is never used here. */
+async function storedGuestId(): Promise<string | null> {
+  const { data } = await guestSupabase.auth.getSession();
+  const user = data.session?.user;
+  return user?.is_anonymous ? user.id : null;
+}
+
+/**
+ * The guest of this browser: the stored guest session if there is one,
+ * otherwise one new anonymous guest for all tabs. Guest pages keep their own
+ * session (guestSupabase), so an admin signed in on the same browser stays
+ * signed in and is never used as the guest.
+ */
 const ensureGuest = createGuestSignIn({
-  currentUserId: async () => {
-    const existing = await supabase.auth.getSession();
-    return existing.data.session?.user?.id ?? null;
-  },
+  currentUserId: storedGuestId,
   // At a venue every guest on the Wi-Fi shares one sign-in limit, so a busy
   // moment (429) or a dropped connection is retried before giving up.
   signIn: () =>
     retryTransient(
       async () => {
-        const signed = await supabase.auth.signInAnonymously();
+        const signed = await guestSupabase.auth.signInAnonymously();
         if (signed.error || !signed.data.user) throw toAppError(signed.error, "לא הצלחנו לפתוח את האירוע. נסו שוב.");
         return signed.data.user.id;
       },
@@ -749,9 +758,7 @@ export async function ensureGuestSession(options: { onWait?: () => void } = {}):
  */
 export async function currentGuestId(): Promise<string | null> {
   try {
-    const { data } = await supabase.auth.getSession();
-    const user = data.session?.user;
-    return user?.is_anonymous ? user.id : null;
+    return await storedGuestId();
   } catch {
     return null;
   }
@@ -759,7 +766,7 @@ export async function currentGuestId(): Promise<string | null> {
 
 /** Renews the guest's sign-in after the server said it expired. */
 export async function refreshGuestSession(): Promise<void> {
-  await supabase.auth.refreshSession();
+  await guestSupabase.auth.refreshSession();
 }
 
 export async function guestMagnetsLeft(eventId: string, quota: number): Promise<number> {
@@ -767,19 +774,28 @@ export async function guestMagnetsLeft(eventId: string, quota: number): Promise<
   return countMagnetsLeft(quota, jobs);
 }
 
-export async function signedMediaUrl(
-  path: string,
-  size?: { width: number; resize?: "cover" | "contain" },
-): Promise<string | null> {
+type MediaSize = { width: number; resize?: "cover" | "contain" };
+
+async function signWith(client: typeof supabase, path: string, size?: MediaSize): Promise<string | null> {
   if (size) {
-    const sized = await supabase.storage.from("media").createSignedUrl(path, 60 * 30, {
+    const sized = await client.storage.from("media").createSignedUrl(path, 60 * 30, {
       transform: { width: size.width, resize: size.resize ?? "cover", quality: 70 },
     });
     if (!sized.error && sized.data?.signedUrl) return sized.data.signedUrl;
   }
-  const { data, error } = await supabase.storage.from("media").createSignedUrl(path, 60 * 30);
+  const { data, error } = await client.storage.from("media").createSignedUrl(path, 60 * 30);
   if (error || !data?.signedUrl) return null;
   return data.signedUrl;
+}
+
+/** A signed URL for the admin screens. */
+export async function signedMediaUrl(path: string, size?: MediaSize): Promise<string | null> {
+  return signWith(supabase, path, size);
+}
+
+/** A signed URL for the guest pages, with the guest's own rights only. */
+export async function guestSignedMediaUrl(path: string, size?: MediaSize): Promise<string | null> {
+  return signWith(guestSupabase, path, size);
 }
 
 export type PublishedFrameWindow = {
@@ -818,10 +834,10 @@ function mapPrintError(error: unknown, status?: number): AppError {
 
 export async function getPublishedFrameWindow(id: string): Promise<PublishedFrameWindow | null> {
   try {
-    const frame = await supabase.rpc("get_frame_window", { p_id: id }).maybeSingle();
+    const frame = await guestSupabase.rpc("get_frame_window", { p_id: id }).maybeSingle();
     if (!frame.error) return (frame.data as PublishedFrameWindow | null) ?? null;
     if (!missingFunction(frame.error)) throw frame.error;
-    const { data, error } = await supabase
+    const { data, error } = await guestSupabase
       .from("frames")
       .select("id, width_mm, height_mm, window_x, window_y, window_w, window_h")
       .eq("id", id)
@@ -846,13 +862,13 @@ export async function createGuestPrint(
     p_copies: copies,
     p_frame_id: frameId,
   };
-  const first = await supabase.rpc("create_guest_print", args);
+  const first = await guestSupabase.rpc("create_guest_print", args);
   const legacy =
     first.error &&
     /create_guest_print/.test(first.error.message) &&
     /schema cache|Could not find the function|PGRST202/.test(first.error.message);
   const result = legacy
-    ? await supabase.rpc("create_guest_print", {
+    ? await guestSupabase.rpc("create_guest_print", {
         p_event_id: eventId,
         p_storage_path: storagePath,
         p_copies: copies,
@@ -882,15 +898,27 @@ function asJob(row: Record<string, unknown>): PrintJob {
   };
 }
 
+/**
+ * The calling guest's own magnets for one event. It reads with the guest's
+ * session and also asks only for that guest's rows, so it never returns
+ * another guest's magnets, whatever the database rules would allow.
+ */
 export async function listOwnPrintJobs(eventId: string): Promise<PrintJob[]> {
   try {
-    const first = await supabase.from("print_jobs").select(JOB_COLUMNS).eq("event_id", eventId).order("created_at", { ascending: false });
+    const guestId = await storedGuestId();
+    if (!guestId) return [];
+    const own = (columns: string) =>
+      guestSupabase
+        .from("print_jobs")
+        .select(columns)
+        .eq("event_id", eventId)
+        .eq("guest_id", guestId)
+        .order("created_at", { ascending: false });
+    const first = await own(JOB_COLUMNS);
     const legacy = first.error && missingColumn(first.error, "frame_id");
-    const { data, error } = legacy
-      ? await supabase.from("print_jobs").select(JOB_LEGACY).eq("event_id", eventId).order("created_at", { ascending: false })
-      : first;
+    const { data, error } = legacy ? await own(JOB_LEGACY) : first;
     if (error) throw error;
-    return (data ?? []).map((row) => asJob(row as Record<string, unknown>));
+    return (data ?? []).map((row) => asJob(row as unknown as Record<string, unknown>));
   } catch (error) {
     throw toAppError(error, "לא הצלחנו לטעון את המגנטים שלכם.");
   }

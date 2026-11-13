@@ -6,7 +6,7 @@ import {
   getEventCardBySlug,
   getPublishedFrameWindow,
   listOwnPrintJobs,
-  signedMediaUrl,
+  guestSignedMediaUrl,
 } from "@/services/api";
 import type { PrintJob } from "@/services/types";
 import { GuestQuiet } from "../GuestQuiet";
@@ -28,7 +28,7 @@ async function loadChoice(id: string | null, screen: string | null): Promise<Cam
   if (!id || !screen) return null;
   const row = await getPublishedFrameWindow(id);
   if (!row) return null;
-  const overlayUrl = await signedMediaUrl(screen);
+  const overlayUrl = await guestSignedMediaUrl(screen);
   return {
     id,
     overlayUrl,

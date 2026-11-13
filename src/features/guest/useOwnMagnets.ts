@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { MagnetPoller, SignedUrlCache } from "@/lib/ownMagnets";
-import { listOwnPrintJobs, signedMediaUrl } from "@/services/api";
+import { guestSignedMediaUrl, listOwnPrintJobs } from "@/services/api";
 import type { PrintJob } from "@/services/types";
 
 /**
@@ -9,7 +9,7 @@ import type { PrintJob } from "@/services/types";
  * refresh of the magnets does not sign or download the thumbnails again.
  */
 export const thumbUrls = new SignedUrlCache((path) =>
-  signedMediaUrl(path, { width: 480, resize: "contain" }),
+  guestSignedMediaUrl(path, { width: 480, resize: "contain" }),
 );
 
 function pageVisible(): boolean {

@@ -77,3 +77,34 @@ export function createSessionStore(
     },
   };
 }
+
+/** Whether a stored supabase-js session belongs to an anonymous guest. */
+function isAnonymousSession(raw: string | null): boolean {
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw) as { user?: { is_anonymous?: unknown } } | null;
+    return parsed?.user?.is_anonymous === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Guest pages keep their session under their own key, apart from the admin's
+ * (see supabase.ts). An anonymous guest that an older build saved under the
+ * shared key moves to the guest key once, so a guest keeps their identity,
+ * magnets and quota across the deploy. It is moved, not copied: two clients
+ * refreshing the same session would invalidate each other's refresh token.
+ * Anything else under the shared key (an admin's Google session) stays.
+ */
+export function moveGuestSession(
+  store: KeyValueStore,
+  sharedKey: string,
+  guestKey: string,
+): "moved" | "kept" {
+  const shared = store.getItem(sharedKey);
+  if (!isAnonymousSession(shared) || store.getItem(guestKey) !== null) return "kept";
+  store.setItem(guestKey, shared as string);
+  store.removeItem(sharedKey);
+  return "moved";
+}
