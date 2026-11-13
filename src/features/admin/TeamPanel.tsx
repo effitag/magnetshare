@@ -28,12 +28,15 @@ export function TeamPanel() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  // Assignments shown at once on a click, until the list is read again.
+  const [toggled, setToggled] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     try {
       const [people, rows] = await Promise.all([listStaff(), listAdminEvents()]);
       setStaff(people);
       setEvents(rows);
+      setToggled({});
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "לא הצלחנו לטעון את הצוות.");
     }
@@ -127,7 +130,8 @@ export function TeamPanel() {
                     <legend className="mb-1 text-base">אירועים</legend>
                     {!events.length ? <p className="text-base">אין אירועים.</p> : null}
                     {events.map((event) => {
-                      const checked = person.eventIds.includes(event.id);
+                      const key = `${person.userId}:${event.id}`;
+                      const checked = toggled[key] ?? person.eventIds.includes(event.id);
                       return (
                         <label key={event.id} className="flex min-h-11 items-center gap-3 text-base">
                           <input
@@ -135,13 +139,14 @@ export function TeamPanel() {
                             className="h-5 w-5"
                             checked={checked}
                             disabled={busy}
-                            onChange={() =>
+                            onChange={() => {
+                              setToggled((current) => ({ ...current, [key]: !checked }));
                               void act(() =>
                                 checked
                                   ? unassignOperator(event.id, person.userId as string)
                                   : assignOperator(event.id, person.userId as string),
-                              )
-                            }
+                              );
+                            }}
                           />
                           <span>
                             {event.title} · {STATUS_LABEL[event.status] ?? event.status}
