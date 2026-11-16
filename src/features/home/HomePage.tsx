@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { whatsAppUrl } from "@/config/contact";
 import { ContactSection } from "@/features/home/ContactSection";
+import { HeroPhones } from "@/features/home/HeroPhones";
 import { HomeSections } from "@/features/home/HomeSections";
 import { SiteFooter } from "@/features/home/SiteFooter";
 import { WhatsAppIcon } from "@/features/home/WhatsAppIcon";
@@ -9,11 +10,6 @@ const phrases = [
   "בלי הורדת אפליקציה",
   "בלי הרשמה לאורחים",
   "מגנטים מודפסים, מוכנים לכל אירוע",
-];
-
-const shots = [
-  { src: "/placeholders/snap-b.svg", alt: "תמונת הדגמה קטנה", className: "magnet magnet-small" },
-  { src: "/hero.jpg", alt: "תמונת הדגמה על מגנט", className: "magnet magnet-main" },
 ];
 
 export function HomePage() {
@@ -51,32 +47,22 @@ export function HomePage() {
         </div>
       </div>
 
-      <section className="px-4 md:grid md:grid-cols-2 md:items-center md:gap-6">
+      <section className="px-4 text-center md:grid md:grid-cols-2 md:items-center md:gap-6 md:pt-12 md:text-start">
         <div>
           <h1 className="sticker">
             <span className="block">תמונה בתוך מגנט.</span>
             <span className="sticker-pop block">מודפסת ומוכנה לכם.</span>
           </h1>
-          <p className="mt-4 max-w-md text-base text-ink">
+          <p className="mx-auto mt-4 max-w-md text-base text-ink md:mx-0">
             האורחים מצלמים בתוך מסגרת מעוצבת, ואנחנו מדפיסים לכל אחד מגנט משלו.
           </p>
-          <div className="hero-actions">
-            <a className="btn btn-pop" href="#contact">
-              ספרו לנו על האירוע
-            </a>
-            <a className="btn btn-surface" href={whatsAppUrl()} target="_blank" rel="noopener noreferrer">
-              <WhatsAppIcon />
-              דברו איתנו בוואטסאפ
-            </a>
-          </div>
         </div>
 
-        <div className="magnet-stage mt-6">
-          {shots.map((shot) => (
-            <figure key={shot.className} className={shot.className}>
-              <img src={shot.src} alt={shot.alt} />
-            </figure>
-          ))}
+        <div className="hero-visual mt-8 md:mt-0">
+          <HeroPhones />
+          <a className="btn btn-pop" href="#contact">
+            ספרו לנו על האירוע
+          </a>
         </div>
       </section>
 

@@ -78,7 +78,7 @@ export function ContactSection() {
             <label className="flex flex-col gap-2 text-base text-ink">
               שם
               <input
-                className="field-scroll sticker-card sticker-flat min-h-11 w-full bg-sticker px-3 text-base text-ink"
+                className="field-scroll sticker-card sticker-flat field-control w-full bg-sticker px-3 text-base text-ink"
                 name="name"
                 autoComplete="name"
                 value={name}
@@ -94,7 +94,7 @@ export function ContactSection() {
             <label className="flex flex-col gap-2 text-base text-ink">
               טלפון
               <input
-                className="field-scroll sticker-card sticker-flat min-h-11 w-full bg-sticker px-3 text-base text-ink"
+                className="field-scroll sticker-card sticker-flat field-control w-full bg-sticker px-3 text-base text-ink"
                 name="phone"
                 type="tel"
                 inputMode="tel"
@@ -115,7 +115,7 @@ export function ContactSection() {
                 איזה אירוע <span className="font-normal">(לא חובה)</span>
               </span>
               <select
-                className="sticker-card sticker-flat min-h-11 w-full bg-sticker px-3 text-base text-ink"
+                className="sticker-card sticker-flat field-control w-full bg-sticker px-3 text-base text-ink"
                 name="eventType"
                 value={eventType}
                 onChange={(event) => setEventType(event.target.value)}
