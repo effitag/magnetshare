@@ -20,6 +20,15 @@ const GuestPage = lazy(() => import("@/features/guest/GuestPage").then((module) 
 const CameraPage = lazy(() =>
   import("@/features/guest/camera/CameraPage").then((module) => ({ default: module.CameraPage })),
 );
+const StationGate = lazy(() =>
+  import("@/features/station/StationScreens").then((module) => ({ default: module.StationGate })),
+);
+const StationHome = lazy(() =>
+  import("@/features/station/StationScreens").then((module) => ({ default: module.StationHome })),
+);
+const StationEventPage = lazy(() =>
+  import("@/features/station/StationScreens").then((module) => ({ default: module.StationEventPage })),
+);
 
 export function App() {
   return (
@@ -90,6 +99,17 @@ export function App() {
                 </Suspense>
               }
             />
+          </Route>
+          <Route
+            path="/station"
+            element={
+              <Suspense fallback={<LoadingScreen />}>
+                <StationGate />
+              </Suspense>
+            }
+          >
+            <Route index element={<StationHome />} />
+            <Route path=":eventId" element={<StationEventPage />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
