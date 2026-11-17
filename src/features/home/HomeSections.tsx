@@ -140,6 +140,25 @@ function Testimonials() {
 export function HomeSections() {
   return (
     <>
+      <section id="events" className="band px-4 py-12" aria-labelledby="events-title">
+        <div className="mx-auto max-w-5xl">
+          <h2 id="events-title" className="section-title">
+            לאילו אירועים
+          </h2>
+          <p className="mt-3 text-base text-ink">מהחתונה ועד יום ההולדת.</p>
+          <ul className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {occasions.map((occasion, index) => (
+              <li
+                key={occasion}
+                className={`sticker-card flex min-h-16 items-center justify-center bg-sticker px-3 py-4 text-center text-lg text-ink ${index % 2 === 0 ? "tilt-a" : "tilt-b"}`}
+              >
+                {occasion}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
       <section id="steps" className="band-wash" aria-labelledby="steps-title">
         <div className="mx-auto max-w-xl px-4 pt-12 pb-4">
           <h2 id="steps-title" className="section-title">
@@ -193,27 +212,8 @@ export function HomeSections() {
             ))}
           </ul>
         </div>
-        <Wave className="text-paper" />
       </section>
 
-      <section id="events" className="band px-4 py-12" aria-labelledby="events-title">
-        <div className="mx-auto max-w-5xl">
-          <h2 id="events-title" className="section-title">
-            לאילו אירועים
-          </h2>
-          <p className="mt-3 text-base text-ink">מהחתונה ועד יום ההולדת.</p>
-          <ul className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3">
-            {occasions.map((occasion, index) => (
-              <li
-                key={occasion}
-                className={`sticker-card flex min-h-16 items-center justify-center bg-sticker px-3 py-4 text-center text-lg text-ink ${index % 2 === 0 ? "tilt-a" : "tilt-b"}`}
-              >
-                {occasion}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
 
       {SHOW_GALLERY ? (
       <section id="gallery" className="band-white" aria-labelledby="gallery-title">
