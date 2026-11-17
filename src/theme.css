@@ -91,12 +91,6 @@
   }
 }
 
-.magnet-stage {
-  position: relative;
-  height: 18.5rem;
-  width: min(100%, 18.5rem);
-  margin-inline: auto;
-}
 
 .magnet {
   position: absolute;
@@ -115,33 +109,9 @@
   outline: none;
 }
 
-.magnet-main {
-  top: 2.25rem;
-  inset-inline-start: 0.25rem;
-  z-index: 1;
-  width: 12.5rem;
-  height: 15.5rem;
-  padding: 0.45rem;
-  transform: rotate(-8deg);
-}
 
-.magnet-main img {
-  border-radius: 0.9rem;
-}
 
-.magnet-small {
-  top: 0.25rem;
-  inset-inline-end: 0;
-  width: 6.25rem;
-  height: 7.75rem;
-  padding: 0.3rem;
-  border-radius: 1rem;
-  transform: rotate(8deg);
-}
 
-.magnet-small img {
-  border-radius: 0.65rem;
-}
 
 .magnet-solo {
   position: relative;
@@ -178,6 +148,346 @@
   font-size: 1.05rem;
   line-height: 1.05;
   text-align: center;
+}
+
+/*
+ * The public site's one button: a pill with a 3px ink border and a hard
+ * offset shadow (the same look as .fab). Colour comes from a variant.
+ */
+.btn {
+  display: inline-flex;
+  min-height: 3.25rem;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 1.5rem;
+  border: 3px solid var(--color-ink);
+  border-radius: 999px;
+  color: var(--color-ink);
+  box-shadow: 4px 4px 0 var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  line-height: 1.05;
+  text-align: center;
+  text-decoration: none;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+}
+
+.btn-pop {
+  background: var(--color-pop);
+}
+
+.btn-surface {
+  background: var(--color-surface);
+}
+
+/*
+ * Hero phones: two phones showing the guest camera with a sample magnet
+ * (HeroPhones.tsx). The metal, bezel and glass colours are the phone's own
+ * hardware colours, not brand colours.
+ */
+.hero-visual {
+  display: flex;
+  flex-direction: column;
+  gap: 1.6rem;
+  align-items: center;
+}
+
+.phone-stage {
+  position: relative;
+  height: 29.5rem;
+  width: min(100%, 24rem);
+  margin-inline: auto;
+}
+
+.phone {
+  position: absolute;
+  aspect-ratio: 390 / 780;
+  box-sizing: border-box;
+  padding: 0.22rem;
+  border-radius: 3rem;
+  background: linear-gradient(160deg, #7a7276 0%, #3b3437 22%, #1b1517 50%, #5d5659 86%, #8a8286 100%);
+  box-shadow:
+    0 30px 60px rgba(28, 20, 22, 0.35),
+    0 12px 24px rgba(28, 20, 22, 0.22),
+    inset 0 1px 1px rgba(255, 255, 255, 0.35);
+}
+
+.phone-large {
+  top: 2.2rem;
+  inset-inline-start: 0.2rem;
+  z-index: 1;
+  width: 13rem;
+  transform: rotate(-7deg);
+}
+
+.phone-small {
+  top: 0;
+  inset-inline-end: 0;
+  width: 10.5rem;
+  transform: rotate(8deg);
+}
+
+.phone-bezel {
+  height: 100%;
+  box-sizing: border-box;
+  padding: 0.3rem;
+  border-radius: 2.8rem;
+  background: #0a0809;
+}
+
+.phone-screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 2.5rem;
+  background: var(--color-paper);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.14);
+}
+
+/* Physical buttons, physical sides: the phone does not mirror in RTL. */
+.phone-btn {
+  position: absolute;
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #6a6366, #2a2426);
+}
+
+.phone-btn-silent {
+  left: -2.5px;
+  top: 17%;
+  height: 1rem;
+}
+
+.phone-btn-vol-up {
+  left: -2.5px;
+  top: 25%;
+  height: 1.7rem;
+}
+
+.phone-btn-vol-down {
+  left: -2.5px;
+  top: 33%;
+  height: 1.7rem;
+}
+
+.phone-btn-power {
+  right: -2.5px;
+  top: 27%;
+  height: 2.5rem;
+}
+
+.phone-island {
+  position: absolute;
+  z-index: 5;
+  top: 0.6rem;
+  left: 50%;
+  display: flex;
+  width: 3.6rem;
+  height: 1.05rem;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: flex-end;
+  padding-inline: 0.28rem;
+  border-radius: 999px;
+  background: #060505;
+  transform: translateX(-50%);
+}
+
+.phone-lens {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 35%, #3e4e63 0 28%, #0c0d11 70%);
+}
+
+.phone-glare {
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+  border-radius: 2.5rem;
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.06) 16%, rgba(255, 255, 255, 0) 30%);
+  pointer-events: none;
+}
+
+.phone-cam-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2rem 0.65rem 0;
+}
+
+.phone-cam-glass {
+  display: inline-flex;
+  width: 1.65rem;
+  height: 1.65rem;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--color-ink);
+  border-radius: 999px;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  box-shadow: 1.5px 1.5px 0 var(--color-ink);
+}
+
+.phone-cam-quota {
+  display: inline-flex;
+  min-height: 1.55rem;
+  align-items: center;
+  padding-inline: 0.55rem;
+  border: 2px solid var(--color-ink);
+  border-radius: 999px;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-size: 0.68rem;
+  box-shadow: 1.5px 1.5px 0 var(--color-ink);
+}
+
+.phone-cam-mid {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+}
+
+.phone-cam-controls {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  justify-items: center;
+  padding: 0 1rem 1.1rem;
+}
+
+.phone-shutter {
+  display: flex;
+  width: 3rem;
+  height: 3rem;
+  align-items: center;
+  justify-content: center;
+  border: 2.5px solid var(--color-ink);
+  border-radius: 999px;
+  background: var(--color-paper);
+  box-shadow: 2px 2px 0 var(--color-ink);
+}
+
+.phone-shutter span {
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1.5px solid var(--color-ink);
+  border-radius: 999px;
+  background: var(--color-pop);
+}
+
+/* The sample magnet inside each phone. */
+.mag-card {
+  position: relative;
+  width: 86%;
+  box-sizing: border-box;
+  padding: 0.42rem;
+  border: 2.5px solid var(--color-ink);
+  border-radius: 0.85rem;
+  background: var(--color-sticker);
+  box-shadow: 0 8px 18px rgba(28, 20, 22, 0.18);
+}
+
+.phone-small .mag-card {
+  width: 92%;
+}
+
+.mag-card::after {
+  position: absolute;
+  inset: 0.17rem;
+  border: 1px solid var(--color-accent);
+  border-radius: 0.68rem;
+  content: "";
+  pointer-events: none;
+}
+
+.mag-photo {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 0.5rem;
+}
+
+.mag-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mag-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 0.14rem;
+  align-items: center;
+  padding: 0.4rem 0.2rem 0.22rem;
+  text-align: center;
+}
+
+.mag-names {
+  display: inline-flex;
+  gap: 0.32rem;
+  align-items: center;
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 0.98rem;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+}
+
+.mag-heart {
+  width: 0.8em;
+  height: 0.8em;
+  flex-shrink: 0;
+}
+
+.mag-date {
+  color: var(--color-muted);
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+}
+
+@media (max-width: 640px) {
+  .phone-stage {
+    height: 26.5rem;
+    width: min(100%, 21rem);
+  }
+
+  .phone-large {
+    top: 2rem;
+    width: 11.75rem;
+  }
+
+  .phone-small {
+    width: 9.5rem;
+  }
+}
+
+/* Contact form fields: inputs and the select share one fixed height. */
+.field-control {
+  box-sizing: border-box;
+  height: 2.75rem;
+}
+
+/* The header's contact button: desktop only; on phones the WhatsApp FAB covers it. */
+.header-cta {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .header-cta {
+    display: inline-flex;
+  }
 }
 
 .gallery-card {

@@ -61,7 +61,7 @@ export function ContactSection() {
         </h2>
         <p className="mt-3 text-base text-ink">שם וטלפון, ונחזור.</p>
         <a
-          className="mt-6 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-full border-[3px] border-ink bg-pop px-4 font-display text-xl text-ink shadow-[4px_4px_0_#1c1416]"
+          className="btn btn-pop mt-6 w-full"
           href={whatsAppUrl()}
           target="_blank"
           rel="noopener noreferrer"
@@ -78,7 +78,7 @@ export function ContactSection() {
             <label className="flex flex-col gap-2 text-base text-ink">
               שם
               <input
-                className="field-scroll sticker-card sticker-flat min-h-11 w-full bg-sticker px-3 text-base text-ink"
+                className="field-scroll sticker-card sticker-flat field-control w-full bg-sticker px-3 text-base text-ink"
                 name="name"
                 autoComplete="name"
                 value={name}
@@ -94,7 +94,7 @@ export function ContactSection() {
             <label className="flex flex-col gap-2 text-base text-ink">
               טלפון
               <input
-                className="field-scroll sticker-card sticker-flat min-h-11 w-full bg-sticker px-3 text-base text-ink"
+                className="field-scroll sticker-card sticker-flat field-control w-full bg-sticker px-3 text-base text-ink"
                 name="phone"
                 type="tel"
                 inputMode="tel"
@@ -115,7 +115,7 @@ export function ContactSection() {
                 איזה אירוע <span className="font-normal">(לא חובה)</span>
               </span>
               <select
-                className="sticker-card sticker-flat min-h-11 w-full bg-sticker px-3 text-base text-ink"
+                className="sticker-card sticker-flat field-control w-full bg-sticker px-3 text-base text-ink"
                 name="eventType"
                 value={eventType}
                 onChange={(event) => setEventType(event.target.value)}
@@ -135,7 +135,7 @@ export function ContactSection() {
             ) : null}
             <button
               type="submit"
-              className="field-scroll inline-flex min-h-11 w-full items-center justify-center rounded-full border-2 border-ink bg-surface px-4 text-base text-ink"
+              className="field-scroll btn btn-surface w-full"
               disabled={pending}
               onFocus={(event) => keepVisible(event.target)}
             >
