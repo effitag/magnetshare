@@ -12,6 +12,7 @@ const FramesTab = lazy(() => import("@/features/studio/FramesTab"));
 const EventEditorPage = lazy(() =>
   import("@/features/admin/events/EventEditorPage").then((module) => ({ default: module.EventEditorPage })),
 );
+const TeamPanel = lazy(() => import("@/features/admin/TeamPanel").then((module) => ({ default: module.TeamPanel })));
 const TableCardPage = lazy(() =>
   import("@/features/admin/events/TableCardPage").then((module) => ({ default: module.TableCardPage })),
 );
@@ -81,6 +82,14 @@ export function App() {
               }
             />
             <Route path="leads" element={<AdminEmpty title="פניות" />} />
+            <Route
+              path="team"
+              element={
+                <Suspense fallback={<LoadingScreen />}>
+                  <TeamPanel />
+                </Suspense>
+              }
+            />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

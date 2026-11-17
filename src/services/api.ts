@@ -6,7 +6,7 @@ import { retryTransient } from "@/lib/sendRetry";
 import { countMagnetsLeft, type FrameSlot } from "@/lib/magnets";
 import { guestSupabase, supabase } from "@/lib/supabase";
 import { isFrameObjectPath } from "@/features/studio/storage/paths";
-import type { EventCard, Frame, MagnetCounts, NewLeadInput, PrintJob, PrintJobStatus } from "@/services/types";
+import type { EventCard, Frame, MagnetCounts, NewLeadInput, PrintJob, PrintJobStatus, StaffMember } from "@/services/types";
 
 export async function insertLead(input: NewLeadInput): Promise<void> {
   try {
@@ -924,3 +924,54 @@ export async function listOwnPrintJobs(eventId: string): Promise<PrintJob[]> {
   }
 }
 
+
+// --- Staff ("צוות", admins only) --------------------------------------------
+
+const STAFF_ERRORS: Record<string, string> = {
+  invalid_email: "כתובת המייל לא תקינה.",
+  already_admin: "החשבון הזה הוא מנהל.",
+  not_admin: "רק מנהל יכול לנהל צוות.",
+};
+
+function staffError(error: { message?: string } | null, fallback: string): AppError {
+  const message = String(error?.message ?? "");
+  const code = Object.keys(STAFF_ERRORS).find((key) => message.includes(key));
+  return new AppError(code ? STAFF_ERRORS[code] : toAppError(error, fallback).message, { ...errorInfo(error), code });
+}
+
+export async function listStaff(): Promise<StaffMember[]> {
+  const { data, error } = await supabase.rpc("list_staff");
+  if (error) throw staffError(error, "לא הצלחנו לטעון את הצוות.");
+  return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+    email: String(row.email),
+    role: row.role === "admin" ? "admin" : "operator",
+    userId: (row.user_id as string | null) ?? null,
+    signedIn: row.signed_in === true,
+    eventIds: (row.event_ids as string[] | null) ?? [],
+  }));
+}
+
+/** Allows this Google account to sign in as an operator. Returns the saved (lower-case) email. */
+export async function inviteOperator(email: string): Promise<string> {
+  const { data, error } = await supabase.rpc("invite_operator", { p_email: email });
+  if (error) throw staffError(error, "לא הצלחנו להוסיף את המפעיל.");
+  return String(data);
+}
+
+export async function removeOperator(email: string): Promise<void> {
+  const { error } = await supabase.rpc("remove_operator", { p_email: email });
+  if (error) throw staffError(error, "לא הצלחנו להסיר את המפעיל.");
+}
+
+export async function assignOperator(eventId: string, operatorId: string): Promise<void> {
+  const { data } = await supabase.auth.getSession();
+  const { error } = await supabase
+    .from("event_operators")
+    .insert({ event_id: eventId, operator_id: operatorId, added_by: data.session?.user.id ?? null });
+  if (error && error.code !== "23505") throw toAppError(error, "לא הצלחנו לשייך את המפעיל לאירוע.");
+}
+
+export async function unassignOperator(eventId: string, operatorId: string): Promise<void> {
+  const { error } = await supabase.from("event_operators").delete().eq("event_id", eventId).eq("operator_id", operatorId);
+  if (error) throw toAppError(error, "לא הצלחנו להסיר את השיוך.");
+}
